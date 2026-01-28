@@ -1282,3 +1282,26 @@ def bootstrap_database():
         """)
 
         print("✅ FULL database bootstrap completed")
+
+                # ==================================================
+        # 6️⃣ DEFAULT ADMIN (AUTO-INSERT)
+        # ==================================================
+
+        DEFAULT_ADMIN = "whatsapp:+918667643749"
+
+        # Ensure admin is authorized
+        cursor.execute("""
+            INSERT INTO authorized_users (phone_number, name, authorized)
+            VALUES (%s, %s, true)
+            ON CONFLICT (phone_number) DO NOTHING
+        """, (DEFAULT_ADMIN, "System Admin"))
+
+        # Ensure admin has admin role
+        cursor.execute("""
+            INSERT INTO admin_users (phone_number, name)
+            VALUES (%s, %s)
+            ON CONFLICT (phone_number) DO NOTHING
+        """, (DEFAULT_ADMIN, "System Admin"))
+
+        print(f"✅ Default admin ensured: {DEFAULT_ADMIN}")
+

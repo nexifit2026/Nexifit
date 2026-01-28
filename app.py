@@ -1194,7 +1194,11 @@ def handle_admin_command(sender, incoming_msg):
         response = "📋 *Authorized Users:*\n\n"
         for user in users[:20]:
             status = "✅" if user['authorized'] else "❌"
-            expiry = f" (Expires: {user['expiry_date'][:10]})" if user['expiry_date'] else ""
+            expiry = (
+                f" (Expires: {user['expiry_date'].strftime('%Y-%m-%d')})"
+                if user.get('expiry_date')
+                else ""
+            )
             response += f"{status} {user['phone_number']}{expiry}\n"
         
         if len(users) > 20:

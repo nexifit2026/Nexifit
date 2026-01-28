@@ -19,73 +19,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request, jsonify  # Add jsonify
 import atexit 
 
-import sqlite3
-
-DB_PATH = os.environ.get('DB_PATH', '/data/nexifit_users.db')
-os.environ['DB_PATH'] = DB_PATH
-
-print("\n" + "="*80)
-print("🔧 DATABASE INITIALIZATION (CRITICAL)")
-print("="*80)
-
-# Create directory and databases
-db_dir = os.path.dirname(DB_PATH)
-if db_dir:
-    try:
-        os.makedirs(db_dir, exist_ok=True)
-        print(f"✅ Directory created: {db_dir}")
-    except Exception as e:
-        print(f"❌ FATAL: Cannot create directory: {e}")
-        sys.exit(1)
-
-# Check if database exists and is valid
-db_initialized = False
-if os.path.exists(DB_PATH):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='authorized_users'")
-        if cursor.fetchone():
-            print(f"✅ Database VALID - tables exist")
-            conn.close()
-            db_initialized = True
-        else:
-            print(f"⚠️  Database file exists but NO tables - recreating...")
-            conn.close()
-            os.remove(DB_PATH)
-    except Exception as e:
-        print(f"⚠️  Database corrupted: {e}")
-        try:
-            os.remove(DB_PATH)
-        except:
-            pass
-
-# Create database if needed
-if not db_initialized:
-    print(f"📝 Creating database...")
-    try:
-        from setup_database import setup_database
-        if not setup_database():
-            print("❌ FATAL: Database creation failed")
-            sys.exit(1)
-    except Exception as e:
-        print(f"❌ FATAL: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-print("="*80 + "\n")
-
-# Ensure daily workout schedule table exists
-try:
-    from database import initialize_workout_schedule_table
-    initialize_workout_schedule_table()
-    print("✅ Daily workout schedule table verified")
-except Exception as e:
-    print(f"⚠️ Error initializing workout schedule table: {e}")
-
 # Import database functions
-from database import (
+from database_pg import (
     is_user_authorized, is_admin, log_auth_attempt,
     add_user, remove_user, reactivate_user, list_all_users,
     get_user_info, clean_expired_users,
@@ -3668,72 +3603,7 @@ def whatsapp_webhook():
         # Start only ONE thread with the appropriate flag
         threading.Thread(target=process_and_reply, args=(sender, is_plan_request, incoming_msg)).start()
         return str(resp)
-
-
-# -------------------------
-# Verify database on startup
-# -------------------------
-def verify_database_setup():
-    """
-    Verify database exists and is properly set up.
-    Does NOT create tables - that's done by setup_database.py
-    """
-    import os
-    
-    # Check if database file exists
-    if not os.path.exists('nexifit_users.db'):
-        print("\n" + "="*70)
-        print("❌ ERROR: Database file 'nexifit_users.db' not found!")
-        print("="*70)
-        print("\n📝 First-time setup required. Run:")
-        print("   python setup_database.py")
-        print("\nThis creates all tables and seeds initial data.")
-        print("="*70 + "\n")
-        exit(1)
-    
-    # Verify critical tables exist
-    import sqlite3
-    try:
-        conn = sqlite3.connect('nexifit_users.db')
-        cursor = conn.cursor()
         
-        # Check for essential tables
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name IN (
-                'authorized_users', 'admin_users', 'user_profiles',
-                'mental_health_tips', 'workout_logs', 'workout_streaks'
-            )
-        """)
-        
-        tables = [row[0] for row in cursor.fetchall()]
-        required_tables = ['authorized_users', 'admin_users', 'user_profiles']
-        missing = [t for t in required_tables if t not in tables]
-        
-        if missing:
-            print(f"\n❌ ERROR: Missing tables: {', '.join(missing)}")
-            print("Run: python setup_database.py\n")
-            conn.close()
-            exit(1)
-        
-        conn.close()
-        print("✅ Database verified and ready!")
-        
-        # Ensure streak tracking is initialized (creates table if missing)
-        initialize_streak_tracking()
-        
-    except Exception as e:
-        print(f"❌ Database verification failed: {e}")
-        exit(1)
-
-# -------------------------
-# Verify Database (Only in Main Process)
-# -------------------------
-if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-    verify_database_setup()
-else:
-    # Reloader process - skip initialization
-    pass
 
 # -------------------------
 # 🆕 USER PROFILE UPDATE FUNCTIONS

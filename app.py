@@ -110,16 +110,16 @@ scheduler = None  # Global variable declaration
 def init_scheduler():
     """Initialize scheduler - called at module load time."""
     global scheduler
-    
+
     if scheduler is not None:
         print("⚠️ Scheduler already initialized")
         return scheduler
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("⏰ Initializing Scheduler...")
     print(f"📅 Current Time (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*70)
-    
+    print("=" * 70)
+
     scheduler = BackgroundScheduler(
         jobstores={'default': MemoryJobStore()},
         executors={'default': ThreadPoolExecutor(max_workers=3)},
@@ -130,12 +130,17 @@ def init_scheduler():
         },
         timezone='UTC'
     )
-    
+
     try:
+        # Start scheduler
         scheduler.start()
         print(f"✅ Scheduler started! Running: {scheduler.running}")
-        
-        # Schedule daily mental health tips
+
+        # --------------------------------------------------
+        # CORE SCHEDULED JOBS
+        # --------------------------------------------------
+
+        # Daily mental health tips (7:00 AM IST)
         scheduler.add_job(
             func=send_daily_mental_health_tips,
             trigger='cron',
@@ -146,8 +151,8 @@ def init_scheduler():
             replace_existing=True
         )
         print("✅ Daily tips scheduled: 7:00 AM IST (1:30 AM UTC)")
-        
-        # Schedule weekly progress reports
+
+        # Weekly progress reports (Sunday 8:00 PM IST)
         scheduler.add_job(
             func=send_weekly_progress_reports,
             trigger='cron',
@@ -159,8 +164,8 @@ def init_scheduler():
             replace_existing=True
         )
         print("✅ Weekly reports scheduled: Sundays 8:00 PM IST (2:30 PM UTC)")
-        
-        # Clean expired users daily
+
+        # Cleanup expired users (Daily 2:00 AM IST)
         scheduler.add_job(
             func=clean_expired_users,
             trigger='cron',
@@ -172,27 +177,38 @@ def init_scheduler():
         )
         print("✅ Cleanup scheduled: Daily 2:00 AM IST (8:30 PM UTC)")
 
-        # Initialize DB table FIRST
+        # --------------------------------------------------
+        # DAILY WORKOUT SCHEDULING (SAFE INIT)
+        # --------------------------------------------------
+
+        print("🛠 Initializing workout schedule table...")
         initialize_workout_schedule_table()
 
-        # ✅ NEW: Reschedule all daily workouts
-        reschedule_all_daily_workouts()
-        
-        # Print all jobs
+        print("📅 Restoring daily workout schedules...")
+        try:
+            reschedule_all_daily_workouts()
+        except Exception as e:
+            # Non-critical: never crash app on startup
+            print("⚠️ Workout reschedule skipped:", e)
+
+        # --------------------------------------------------
+        # PRINT JOB SUMMARY
+        # --------------------------------------------------
+
         jobs = scheduler.get_jobs()
         print(f"\n📋 Scheduled Jobs ({len(jobs)}):")
         for job in jobs:
             print(f"   - {job.name}")
             if job.next_run_time:
                 print(f"     Next run: {job.next_run_time}")
-        
-        print("="*70 + "\n")
-        
+
+        print("=" * 70 + "\n")
+
     except Exception as e:
         print(f"❌ Scheduler initialization failed: {e}")
         import traceback
         traceback.print_exc()
-    
+
     return scheduler
 
 

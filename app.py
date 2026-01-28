@@ -2755,6 +2755,18 @@ def whatsapp_webhook():
     sender = request.form.get("From")
     print(f"📩 Incoming from {sender}: {incoming_msg}")
 
+    # 🔍 Fetch user profile from DB (DB is source of truth)
+    profile = get_user_profile(sender)
+    profile_completed = bool(profile and profile.get("profile_completed"))
+
+    # 🔐 Override in-memory session using DB truth
+    if profile_completed:
+        user_sessions[sender] = {
+            "onboarding_step": "done",
+            "profile_completed": True,
+            "profile_confirmed": True
+        }
+
     # =============================
     # 🔐 AUTHENTICATION CHECK
     # =============================

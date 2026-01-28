@@ -46,6 +46,23 @@ from database_pg import (
     get_user_workout_schedule, initialize_workout_schedule_table
 )
 
+from database_pg import initialize_pool
+
+# Initialize database on startup
+try:
+    initialize_pool()
+    print("✅ Database pool initialized")
+except Exception as e:
+    print(f"⚠️ Database initialization error: {e}")
+
+# Then in the main section, before running the app:
+if __name__ == "__main__":
+    # Run setup on first startup
+    import os
+    if os.environ.get('RUN_DB_SETUP') == 'true':
+        print("Running database setup...")
+        os.system("python setup_postgres.py")
+
 # -------------------------
 # Twilio credentials
 # -------------------------

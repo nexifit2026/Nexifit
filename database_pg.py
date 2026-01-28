@@ -1125,14 +1125,17 @@ except Exception as e:
 
 def bootstrap_database():
     """
-    Railway-safe DB initialization.
-    Creates all required tables if they do not exist.
+    FULL Railway-safe DB bootstrap.
+    Creates ALL tables used anywhere in the app.
     Safe to run multiple times.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # 1️⃣ Base tables (NO foreign keys)
+        # ==================================================
+        # 1️⃣ CORE AUTH TABLES (NO DEPENDENCIES)
+        # ==================================================
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS authorized_users (
                 id SERIAL PRIMARY KEY,
@@ -1155,6 +1158,20 @@ def bootstrap_database():
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS auth_logs (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT NOT NULL,
+                action TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT NOW(),
+                success BOOLEAN DEFAULT false
+            )
+        """)
+
+        # ==================================================
+        # 2️⃣ MENTAL HEALTH TIPS
+        # ==================================================
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS mental_health_tips (
                 id SERIAL PRIMARY KEY,
                 tip_text TEXT NOT NULL,
@@ -1164,7 +1181,6 @@ def bootstrap_database():
             )
         """)
 
-        # 2️⃣ Tables depending on authorized_users
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_tip_preferences (
                 phone_number TEXT PRIMARY KEY,
@@ -1174,6 +1190,22 @@ def bootstrap_database():
                 FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
             )
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_tip_history (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT NOT NULL,
+                tip_id INTEGER NOT NULL,
+                sent_date DATE NOT NULL,
+                sent_timestamp TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number),
+                FOREIGN KEY (tip_id) REFERENCES mental_health_tips(id)
+            )
+        """)
+
+        # ==================================================
+        # 3️⃣ WORKOUT TRACKING
+        # ==================================================
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS workout_logs (
@@ -1198,6 +1230,10 @@ def bootstrap_database():
                 FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
             )
         """)
+
+        # ==================================================
+        # 4️⃣ USER PROFILE
+        # ==================================================
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles (
@@ -1227,7 +1263,10 @@ def bootstrap_database():
             )
         """)
 
-        # 3️⃣ LAST: dependent table
+        # ==================================================
+        # 5️⃣ DAILY WORKOUT SCHEDULER (LAST – FK DEPENDENT)
+        # ==================================================
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS daily_workout_schedule (
                 id SERIAL PRIMARY KEY,
@@ -1242,5 +1281,4 @@ def bootstrap_database():
             )
         """)
 
-        print("✅ Database bootstrap completed")
-
+        print("✅ FULL database bootstrap completed")

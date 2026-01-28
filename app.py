@@ -2756,6 +2756,7 @@ def whatsapp_webhook():
     print(f"📩 Incoming from {sender}: {incoming_msg}")
 
     # 🔍 Fetch user profile from DB (DB is source of truth)
+    from database_pg import get_user_profile
     profile = get_user_profile(sender)
     profile_completed = bool(profile and profile.get("profile_completed"))
 

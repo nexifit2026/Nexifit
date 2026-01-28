@@ -1121,3 +1121,126 @@ try:
     initialize_pool()
 except Exception as e:
     print(f"Warning: Could not initialize pool on import: {e}")
+
+
+def bootstrap_database():
+    """
+    Railway-safe DB initialization.
+    Creates all required tables if they do not exist.
+    Safe to run multiple times.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # 1️⃣ Base tables (NO foreign keys)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS authorized_users (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT UNIQUE NOT NULL,
+                name TEXT,
+                authorized BOOLEAN DEFAULT true,
+                date_added TIMESTAMP DEFAULT NOW(),
+                expiry_date TIMESTAMP,
+                notes TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT UNIQUE NOT NULL,
+                name TEXT,
+                date_added TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mental_health_tips (
+                id SERIAL PRIMARY KEY,
+                tip_text TEXT NOT NULL,
+                category TEXT DEFAULT 'general',
+                date_added TIMESTAMP DEFAULT NOW(),
+                active BOOLEAN DEFAULT true
+            )
+        """)
+
+        # 2️⃣ Tables depending on authorized_users
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_tip_preferences (
+                phone_number TEXT PRIMARY KEY,
+                receive_tips BOOLEAN DEFAULT true,
+                preferred_time TEXT DEFAULT '07:00',
+                last_modified TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workout_logs (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT NOT NULL,
+                workout_minutes INTEGER,
+                calories_burned INTEGER,
+                progress_percent REAL,
+                goal TEXT,
+                date_completed TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workout_streaks (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT UNIQUE NOT NULL,
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                last_workout_date DATE,
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT UNIQUE NOT NULL,
+                name TEXT,
+                age INTEGER,
+                gender TEXT,
+                weight TEXT,
+                height TEXT,
+                bmi REAL,
+                fitness_goal TEXT,
+                medical_conditions TEXT,
+                injuries TEXT,
+                allergies TEXT,
+                diet_preference TEXT,
+                activity_level TEXT,
+                stress_level TEXT,
+                workout_duration TEXT,
+                workout_location TEXT,
+                workout_time TEXT,
+                exercises_to_avoid TEXT,
+                profile_completed BOOLEAN DEFAULT false,
+                date_created TIMESTAMP DEFAULT NOW(),
+                last_updated TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+
+        # 3️⃣ LAST: dependent table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_workout_schedule (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT UNIQUE NOT NULL,
+                preferred_time TEXT NOT NULL,
+                timezone TEXT DEFAULT 'Asia/Kolkata',
+                job_id TEXT,
+                active BOOLEAN DEFAULT true,
+                last_plan_sent TIMESTAMP,
+                date_created TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+
+        print("✅ Database bootstrap completed")
+

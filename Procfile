@@ -1,2 +1,1 @@
-web: gunicorn app:app
-
+web: python setup_postgres.py && gunicorn app:app

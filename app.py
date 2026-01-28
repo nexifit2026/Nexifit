@@ -171,7 +171,10 @@ def init_scheduler():
             replace_existing=True
         )
         print("✅ Cleanup scheduled: Daily 2:00 AM IST (8:30 PM UTC)")
-        
+
+        # Initialize DB table FIRST
+        initialize_workout_schedule_table()
+
         # ✅ NEW: Reschedule all daily workouts
         reschedule_all_daily_workouts()
         

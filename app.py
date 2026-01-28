@@ -625,7 +625,7 @@ def send_daily_workout_plan(phone_number):
     Args:
         phone_number: User's WhatsApp number
     """
-    from database import mark_plan_sent, get_user_profile
+    from database_pg import mark_plan_sent, get_user_profile
     
     print(f"\n{'='*50}")
     print(f"💪 Sending daily workout to {phone_number}")
@@ -789,7 +789,7 @@ def schedule_user_daily_workout(phone_number, preferred_time):
         return False
     
     try:
-        from database import update_schedule_job_id
+        from database_pg import update_schedule_job_id
         
         # Parse time
         hour, minute = map(int, preferred_time.split(':'))
@@ -844,7 +844,7 @@ def reschedule_all_daily_workouts():
     Reschedule all active users' daily workouts.
     Call this during app startup to restore schedules after restart.
     """
-    from database import get_all_scheduled_users
+    from database_pg import get_all_scheduled_users
     
     print("\n" + "="*70)
     print("📅 Rescheduling all daily workouts on startup...")
@@ -1292,7 +1292,7 @@ def handle_admin_command(sender, incoming_msg):
         
     # ✅ NEW: LIST WORKOUT SCHEDULES
     elif msg == "ADMIN SCHEDULES":
-        from database import get_all_scheduled_users
+        from database_pg import get_all_scheduled_users
         
         users = get_all_scheduled_users()
         
@@ -1342,7 +1342,7 @@ def handle_admin_command(sender, incoming_msg):
         
         phone = parts[2]
         
-        from database import deactivate_workout_schedule
+        from database_pg import deactivate_workout_schedule
         success, message = deactivate_workout_schedule(phone)
         
         return f"{'✅' if success else '⚠️'} {message}"
@@ -2727,7 +2727,7 @@ def scheduler_status():
 # -------------------------
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
-    from database import calculate_bmi, get_bmi_category
+    from database_pg import calculate_bmi, get_bmi_category
     
     incoming_msg = request.form.get("Body", "").strip()
     sender = request.form.get("From")
@@ -3160,7 +3160,7 @@ def whatsapp_webhook():
             # Show complete profile summary
             bmi_text = ""
             if profile_data.get('bmi'):
-                from database import get_bmi_category
+                from database_pg import get_bmi_category
                 category = get_bmi_category(profile_data['bmi'])
                 bmi_text = f"BMI: {profile_data['bmi']} ({category})\n"
     
@@ -3234,7 +3234,7 @@ def whatsapp_webhook():
             )
             return str(resp)
 
-            from database import save_workout_schedule
+            from database_pg import save_workout_schedule
             
             workout_time = session.get("workout_time", "Morning")
             success, normalized_time = save_workout_schedule(sender, workout_time)
@@ -3353,12 +3353,12 @@ def whatsapp_webhook():
                 # Mark profile as completed in database
                 mark_profile_completed(sender)
                 
-                from database import get_user_profile
+                from database_pg import get_user_profile
                 profile = get_user_profile(sender)
                 
                 scheduled_time = None
                 if profile and profile.get('workout_time'):
-                    from database import normalize_workout_time
+                    from database_pg import normalize_workout_time
                     normalized_time = normalize_workout_time(profile['workout_time'])
                     
                     if normalized_time:
@@ -3753,7 +3753,7 @@ def get_current_profile(session):
     # Calculate BMI
     bmi_text = ""
     if session.get('weight') and session.get('height'):
-        from database import calculate_bmi, get_bmi_category
+        from database_pg import calculate_bmi, get_bmi_category
         bmi = calculate_bmi(session['weight'], session['height'])
         if bmi:
             category = get_bmi_category(bmi)

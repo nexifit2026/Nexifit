@@ -749,7 +749,7 @@ def save_user_profile(phone_number, profile_data):
                 profile_data.get('workout_location'),
                 profile_data.get('workout_time'),
                 profile_data.get('exercises_to_avoid'),
-                profile_data.get('profile_completed', False)
+                bool(profile_data.get('profile_completed', False))
             ))
             
             return True

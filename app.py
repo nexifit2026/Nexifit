@@ -3369,7 +3369,28 @@ def whatsapp_webhook():
             if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']:
                 session["profile_confirmed"] = True
                 session["confirmation_attempts"] = 0  # Reset
-                
+
+                profile_data = {
+                    'name': session['name'],
+                    'age': session['age'],
+                    'gender': session['gender'],
+                    'weight': session['weight'],
+                    'height': session['height'],
+                    'bmi': session.get('bmi'),
+                    'fitness_goal': session['fitness_goal'],
+                    'medical_conditions': session.get('medical_conditions'),
+                    'injuries': session.get('injuries'),
+                    'allergies': session.get('allergies'),
+                    'diet_preference': session.get('diet_preference'),
+                    'activity_level': session.get('activity_level'),
+                    'stress_level': session.get('stress_level'),
+                    'workout_duration': session.get('workout_duration'),
+                    'workout_location': session.get('workout_location'),
+                    'workout_time': session.get('workout_time'),
+                    'exercises_to_avoid': session.get('exercises_to_avoid'),
+                    'profile_completed': True
+                }
+    
                 # ✅ FIX: Validate critical fields before proceeding
                 missing = []
                 if not session.get('weight'):
@@ -3388,7 +3409,8 @@ def whatsapp_webhook():
                     session["onboarding_step"] = "personalize"
                     session["profile_confirmed"] = False
                     return str(resp)
-                
+                    
+                save_user_profile(sender, profile_data)
                 # Mark profile as completed in database
                 mark_profile_completed(sender)
                 

@@ -286,18 +286,25 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
             """Send motivational message using template or fallback."""
             try:
                 if MOTIVATIONAL_MESSAGE_TEMPLATE_SID:
+                    clean_streak = streak_message.replace('\n\n', ' ').replace('\n', ' ').strip()
+                    clean_streak = clean_streak[:300]  # Limit length
+                    
+                    template_vars = {
+                        "1": str(name or "Champion"),
+                        "2": str(int(calories_burned) if calories_burned else 0),
+                        "3": str(int(progress_percent) if progress_percent else 0),
+                        "4": str(goal or "your fitness goals"),
+                        "5": clean_streak
+                    }
+                    
+                    print(f"📤 Motivational template vars: {template_vars}")
+                    
                     # Send using template
                     message = client.messages.create(
                         from_=TWILIO_WHATSAPP_NUMBER,
                         to=sender,
                         content_sid=MOTIVATIONAL_MESSAGE_TEMPLATE_SID,
-                        content_variables=json.dumps({
-                            "1": name,
-                            "2": str(calories_burned or 0),
-                            "3": str(progress_percent or 0),
-                            "4": goal,
-                            "5": streak_message
-                        })
+                        content_variables=json.dumps(template_vars)
                     )
                     print(f"✅ Motivational template sent to {sender} (SID: {message.sid})")
                     
@@ -476,16 +483,25 @@ def send_daily_mental_health_tips():
             # ✅ METHOD 1: Using Twilio Content Template (RECOMMENDED)
             if WELLNESS_TIP_TEMPLATE_SID and WELLNESS_TIP_TEMPLATE_SID != "HXxxxxx":
                 try:
+                    tip_text = tip['tip_text'] or "Stay positive today!"
+                    
+                    clean_tip_text = tip_text.replace('\n\n', ' ').replace('\n', ' ').strip()
+                    clean_tip_text = clean_tip_text[:500]  # Limit to 500 chars
+                    
+                    template_vars = {
+                        "1": str(name or "there"),
+                        "2": str(emoji or "💭"),
+                        "3": clean_tip_text
+                    }
+                    
+                    print(f"📤 Wellness tip template vars: {template_vars}")
+                    
                     # Send using template
                     message = client.messages.create(
                         from_=TWILIO_WHATSAPP_NUMBER,
                         to=phone_number,
                         content_sid=WELLNESS_TIP_TEMPLATE_SID,
-                        content_variables=json.dumps({
-                            "1": name,           # {{1}} = name
-                            "2": emoji,          # {{2}} = emoji
-                            "3": tip['tip_text'] # {{3}} = tip text
-                        })
+                        content_variables=json.dumps(template_vars)
                     )
                     
                     print(f"✅ Template message sent to {phone_number} (SID: {message.sid})")

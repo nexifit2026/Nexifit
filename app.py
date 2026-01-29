@@ -3383,6 +3383,15 @@ def whatsapp_webhook():
         
         # ========== PROFILE CONFIRMATION HANDLER ==========
         if not session.get("profile_confirmed") and session.get("profile_completed"):
+        
+            # 🐛 DEBUG: Log state
+            print(f"🔍 DEBUG Profile Confirmation:")
+            print(f"   Incoming message: '{incoming_msg}'")
+            print(f"   msg_lower: '{msg_lower}'")
+            print(f"   profile_confirmed: {session.get('profile_confirmed')}")
+            print(f"   profile_completed: {session.get('profile_completed')}")
+            print(f"   Will enter confirmation flow: {msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']}")
+    
             # Track confirmation attempts
             if "confirmation_attempts" not in session:
                 session["confirmation_attempts"] = 0
@@ -3390,7 +3399,7 @@ def whatsapp_webhook():
             if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']:
                 session["profile_confirmed"] = True
                 session["confirmation_attempts"] = 0  # Reset
-
+        
                 profile_data = {
                     'name': session['name'],
                     'age': session['age'],
@@ -3411,8 +3420,8 @@ def whatsapp_webhook():
                     'exercises_to_avoid': session.get('exercises_to_avoid'),
                     'profile_completed': True
                 }
-    
-                # ✅ FIX: Validate critical fields before proceeding
+        
+                # Validate critical fields
                 missing = []
                 if not session.get('weight'):
                     missing.append('weight')
@@ -3431,16 +3440,16 @@ def whatsapp_webhook():
                     session["profile_confirmed"] = False
                     return str(resp)
                     
+                # Save profile
                 save_user_profile(sender, profile_data)
-                # Mark profile as completed in database
                 mark_profile_completed(sender)
                 
-                from database_pg import get_user_profile
+                # Schedule daily workouts if time preference exists
+                from database_pg import get_user_profile, normalize_workout_time
                 profile = get_user_profile(sender)
                 
                 scheduled_time = None
                 if profile and profile.get('workout_time'):
-                    from database_pg import normalize_workout_time
                     normalized_time = normalize_workout_time(profile['workout_time'])
                     
                     if normalized_time:
@@ -3464,21 +3473,14 @@ def whatsapp_webhook():
                 
                 resp.message(confirmation_msg)
                 
-                # ✅ Generate IMMEDIATE first plan (in background)
+                # Generate immediate first plan
                 session["messages"].append(HumanMessage(
                     content=f"Create my first personalized workout plan for today based on my profile."
                 ))
                 
                 threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
-                return str(resp)
                 
-                # ✅ FIX: Add the message to history and generate plan
-                session["messages"].append(HumanMessage(
-                    content=f"Create my first personalized workout plan for today based on my profile."
-                ))
-                
-                # Start plan generation in background
-                threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
+                # CRITICAL: Return immediately
                 return str(resp)
                 
             elif msg_lower in ['no', 'nope', 'change', 'incorrect', 'wrong']:
@@ -3500,7 +3502,7 @@ def whatsapp_webhook():
                 # After 3 attempts, auto-confirm and move on
                 if session["confirmation_attempts"] >= 3:
                     session["profile_confirmed"] = True
-                    session["confirmation_attempts"] = 0  # Reset
+                    session["confirmation_attempts"] = 0
                     mark_profile_completed(sender)
                     
                     resp = MessagingResponse()
@@ -3510,12 +3512,11 @@ def whatsapp_webhook():
                         "Creating your first plan... 💪"
                     )
                     
-                    # ✅ FIX: Generate plan after auto-confirmation too
                     session["messages"].append(HumanMessage(
                         content=f"Create my first personalized workout plan for today based on my profile."
                     ))
                     
-                    threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
+                    threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
                     return str(resp)
                 
                 # Still trying to confirm
@@ -3528,7 +3529,7 @@ def whatsapp_webhook():
                 )
                 return str(resp)
                 
-        # ========== END CONFIRMATION HANDLER ==========
+        # ========== END CONFIRMATION HANDLER ========== #
 
         # Check if user wants to view profile
         if msg_lower in ['profile', 'my profile', 'show profile', 'view profile', 'current profile']:

@@ -2769,7 +2769,28 @@ def whatsapp_webhook():
         user_sessions[sender] = {
             "onboarding_step": "done",
             "profile_completed": True,
-            "profile_confirmed": True
+            "profile_confirmed": True,
+            "name": profile.get('name'),
+            "age": profile.get('age'),
+            "gender": profile.get('gender'),
+            "weight": profile.get('weight'),
+            "height": profile.get('height'),
+            "fitness_goal": profile.get('fitness_goal'),
+            "medical_conditions": profile.get('medical_conditions'),
+            "injuries": profile.get('injuries'),
+            "allergies": profile.get('allergies'),
+            "diet_preference": profile.get('diet_preference'),
+            "activity_level": profile.get('activity_level'),
+            "stress_level": profile.get('stress_level'),
+            "workout_duration": profile.get('workout_duration'),
+            "workout_location": profile.get('workout_location'),
+            "workout_time": profile.get('workout_time'),
+            "exercises_to_avoid": profile.get('exercises_to_avoid'),
+            "bmi": profile.get('bmi'),
+            "messages": [],
+            "reminders": [],
+            "just_viewed_profile": False,
+            "last_goal_check": datetime.now()
         }
 
     # =============================

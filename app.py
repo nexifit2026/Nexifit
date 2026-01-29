@@ -2759,19 +2759,6 @@ def whatsapp_webhook():
     sender = request.form.get("From")
     print(f"📩 Incoming from {sender}: {incoming_msg}")
 
-    # 🔍 Fetch user profile from DB (DB is source of truth)
-    from database_pg import get_user_profile
-    profile = get_user_profile(sender)
-    profile_completed = bool(profile and profile.get("profile_completed"))
-
-    # 🔐 Override in-memory session using DB truth
-    if profile_completed:
-        user_sessions[sender] = {
-            "onboarding_step": "done",
-            "profile_completed": True,
-            "profile_confirmed": True
-        }
-
     # =============================
     # 🔐 AUTHENTICATION CHECK
     # =============================
@@ -2818,55 +2805,84 @@ def whatsapp_webhook():
     # =============================
 
     if sender not in user_sessions:
-        user_sessions[sender] = {
-            "messages": [],
-            "onboarding_step": "basic",
-            "name": None,
-            "age": None,
-            "gender": None,
-            "weight": None,
-            "height": None,
-            "fitness_goal": None,
-            "injury": None,
-            "reminders": [],
-            "last_goal_check": datetime.now(),
-            "user_restrictions": None,
-            "just_viewed_profile": False,
-            "medical_conditions": None,
-            "injuries": None,
-            "allergies": None,
-            "diet_preference": None,
-            "activity_level": None,
-            "stress_level": None,
-            "workout_duration": None,
-            "workout_location": None,
-            "workout_time": None,
-            "exercises_to_avoid": None,
-            "bmi": None,
-            "profile_completed": False,
-            "profile_confirmed": False
-        }
+        # Check if user has completed profile in database
+        profile = get_user_profile(sender)
+        
+        if profile and profile.get("profile_completed"):
+            # ✅ User has completed profile - restore full session from DB
+            user_sessions[sender] = {
+                "messages": [],
+                "onboarding_step": "done",
+                "profile_completed": True,
+                "profile_confirmed": True,
+                "name": profile.get('name'),
+                "age": profile.get('age'),
+                "gender": profile.get('gender'),
+                "weight": profile.get('weight'),
+                "height": profile.get('height'),
+                "fitness_goal": profile.get('fitness_goal'),
+                "medical_conditions": profile.get('medical_conditions'),
+                "injuries": profile.get('injuries'),
+                "allergies": profile.get('allergies'),
+                "diet_preference": profile.get('diet_preference'),
+                "activity_level": profile.get('activity_level'),
+                "stress_level": profile.get('stress_level'),
+                "workout_duration": profile.get('workout_duration'),
+                "workout_location": profile.get('workout_location'),
+                "workout_time": profile.get('workout_time'),
+                "exercises_to_avoid": profile.get('exercises_to_avoid'),
+                "bmi": profile.get('bmi'),
+                "just_viewed_profile": False,
+                "reminders": [],
+                "last_goal_check": datetime.now()
+            }
+            
+            print(f"✅ Restored completed profile from DB for {sender}")
+            
+        else:
+            # ✅ New user - start fresh onboarding
+            user_sessions[sender] = {
+                "messages": [],
+                "onboarding_step": "basic",
+                "name": None,
+                "age": None,
+                "gender": None,
+                "weight": None,
+                "height": None,
+                "fitness_goal": None,
+                "injury": None,
+                "reminders": [],
+                "last_goal_check": datetime.now(),
+                "user_restrictions": None,
+                "just_viewed_profile": False,
+                "medical_conditions": None,
+                "injuries": None,
+                "allergies": None,
+                "diet_preference": None,
+                "activity_level": None,
+                "stress_level": None,
+                "workout_duration": None,
+                "workout_location": None,
+                "workout_time": None,
+                "exercises_to_avoid": None,
+                "bmi": None,
+                "profile_completed": False,
+                "profile_confirmed": False
+            }
 
-        # Greeting message
-        combined_intro = (
-            "💪 Hey there! I'm *NexiFit*\n\n"
-            "I’ll help you stay consistent with workouts and food — right here on WhatsApp!\n\n"
-            "Before we plan anything, tell me a bit about you.\n\n"
-            "👉 *Name , Age , Gender*\n\n"
-            "Example: Nexi , 27 , Male"
-        )
+            # Greeting message for new users
+            combined_intro = (
+                "💪 Hey there! I'm *NexiFit*\n\n"
+                "I'll help you stay consistent with workouts and food — right here on WhatsApp!\n\n"
+                "Before we plan anything, tell me a bit about you.\n\n"
+                "👉 *Name , Age , Gender*\n\n"
+                "Example: Nexi , 27 , Male"
+            )
 
-        resp = MessagingResponse()
-        resp.message(combined_intro)
-
-        # threading.Timer(2.0, lambda: client.messages.create(
-        #     from_=TWILIO_WHATSAPP_NUMBER,
-        #     to=sender,
-        #     body=combined_intro
-        # )).start()
-
-        print(f"✅ New authorized user greeted: {sender}")
-        return str(resp)
+            resp = MessagingResponse()
+            resp.message(combined_intro)
+            print(f"✅ New authorized user greeted: {sender}")
+            return str(resp)
 
     session = user_sessions[sender]
 

@@ -3408,7 +3408,6 @@ def whatsapp_webhook():
                 # Mark profile as completed in database
                 mark_profile_completed(sender)
                 
-                from database_pg import get_user_profile
                 profile = get_user_profile(sender)
                 
                 scheduled_time = None

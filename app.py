@@ -51,7 +51,7 @@ from database_pg import (
 # -------------------------
 TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER", "whatsapp:+919751887676")
+TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
 ADMIN_CONTACT = os.environ.get("ADMIN_CONTACT", "admin@nexifit.com")
 
 WELLNESS_TIP_TEMPLATE_SID = os.environ.get("WELLNESS_TIP_TEMPLATE_SID", "HXf4c280d2f9ce9387e54914cc5ef14e94")

@@ -2769,28 +2769,7 @@ def whatsapp_webhook():
         user_sessions[sender] = {
             "onboarding_step": "done",
             "profile_completed": True,
-            "profile_confirmed": True,  # They already confirmed in the past
-            "name": profile.get('name'),
-            "age": profile.get('age'),
-            "gender": profile.get('gender'),
-            "weight": profile.get('weight'),
-            "height": profile.get('height'),
-            "fitness_goal": profile.get('fitness_goal'),
-            "medical_conditions": profile.get('medical_conditions'),
-            "injuries": profile.get('injuries'),
-            "allergies": profile.get('allergies'),
-            "diet_preference": profile.get('diet_preference'),
-            "activity_level": profile.get('activity_level'),
-            "stress_level": profile.get('stress_level'),
-            "workout_duration": profile.get('workout_duration'),
-            "workout_location": profile.get('workout_location'),
-            "workout_time": profile.get('workout_time'),
-            "exercises_to_avoid": profile.get('exercises_to_avoid'),
-            "bmi": profile.get('bmi'),
-            "messages": [],
-            "reminders": [],
-            "just_viewed_profile": False,
-            "last_goal_check": datetime.now()
+            "profile_confirmed": True
         }
 
     # =============================
@@ -3213,7 +3192,7 @@ def whatsapp_webhook():
             }
             
             save_user_profile(sender, profile_data)
-            session["onboarding_step"] = "confirm_profile"
+            session["onboarding_step"] = "done"
             session["profile_completed"] = True
             session["profile_confirmed"] = False
     
@@ -3327,110 +3306,7 @@ def whatsapp_webhook():
             )
             return str(resp)
 
-        # ========== PROFILE CONFIRMATION STATE ==========
-        if session["onboarding_step"] == "confirm_profile":
-            msg_lower = incoming_msg.lower().strip()
-            
-            # Initialize attempts counter
-            if "confirmation_attempts" not in session:
-                session["confirmation_attempts"] = 0
-            
-            # User confirms with YES
-            if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']:
-                session["profile_confirmed"] = True
-                session["onboarding_step"] = "done"  # Move to normal conversation
-                session["confirmation_attempts"] = 0
-                
-                # Mark in database
-                mark_profile_completed(sender)
-                
-                # Schedule daily workouts
-                from database_pg import get_user_profile, normalize_workout_time
-                profile = get_user_profile(sender)
-                
-                scheduled_time = None
-                if profile and profile.get('workout_time'):
-                    normalized_time = normalize_workout_time(profile['workout_time'])
-                    
-                    if normalized_time:
-                        if schedule_user_daily_workout(sender, normalized_time):
-                            scheduled_time = normalized_time
-                            print(f"✅ Daily workouts scheduled for {sender} at {normalized_time}")
-                
-                # Send confirmation
-                resp = MessagingResponse()
-                
-                confirmation_msg = f"🎯 Perfect, {session['name']}!\n\n"
-                confirmation_msg += f"✅ Profile saved successfully\n"
-                
-                if scheduled_time:
-                    confirmation_msg += f"✅ Daily workouts scheduled at {scheduled_time} IST\n"
-                    confirmation_msg += f"   (Starting from tomorrow)\n\n"
-                
-                confirmation_msg += f"Creating your first workout plan now... 💪"
-                
-                resp.message(confirmation_msg)
-                
-                # Generate first plan
-                session["messages"].append(HumanMessage(
-                    content=f"Create my first personalized workout plan for today based on my profile."
-                ))
-                
-                threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
-                
-                return str(resp)
-            
-            # User wants to make changes
-            elif msg_lower in ['no', 'nope', 'change', 'incorrect', 'wrong']:
-                session["confirmation_attempts"] = 0
-                resp = MessagingResponse()
-                resp.message(
-                    "📝 What would you like to change?\n\n"
-                    "Examples:\n"
-                    "• 'Change my weight to 75kg'\n"
-                    "• 'Update goal to lose weight'\n"
-                    "• 'My diet is vegetarian'"
-                )
-                # Stay in confirm_profile state but allow updates
-                return str(resp)
-            
-            # Unclear response
-            else:
-                session["confirmation_attempts"] += 1
-                
-                # After 3 attempts, auto-confirm
-                if session["confirmation_attempts"] >= 3:
-                    session["profile_confirmed"] = True
-                    session["onboarding_step"] = "done"
-                    session["confirmation_attempts"] = 0
-                    mark_profile_completed(sender)
-                    
-                    resp = MessagingResponse()
-                    resp.message(
-                        "✅ I'll use your profile as-is.\n\n"
-                        "You can always update it later by saying 'change my [field]'.\n\n"
-                        "Creating your first plan... 💪"
-                    )
-                    
-                    session["messages"].append(HumanMessage(
-                        content=f"Create my first personalized workout plan for today based on my profile."
-                    ))
-                    
-                    threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
-                    return str(resp)
-                
-                # Ask again
-                resp = MessagingResponse()
-                resp.message(
-                    "Please confirm your profile:\n\n"
-                    "Reply:\n"
-                    "• 'Yes' to confirm\n"
-                    "• 'No' to make changes"
-                )
-                return str(resp)
-        
-            # ========== END PROFILE CONFIRMATION STATE ==========
-            
+
     # Step 3: Normal conversation
     if session["onboarding_step"] == "done":
         
@@ -3483,6 +3359,133 @@ def whatsapp_webhook():
                     "   • Schedule a reminder for lunch in 1 hour"
                 )
                 return str(resp)
+        
+        # ========== PROFILE CONFIRMATION HANDLER ==========
+        if not session.get("profile_confirmed") and session.get("profile_completed"):
+            # Track confirmation attempts
+            if "confirmation_attempts" not in session:
+                session["confirmation_attempts"] = 0
+            
+            if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']:
+                session["profile_confirmed"] = True
+                session["confirmation_attempts"] = 0  # Reset
+                
+                # ✅ FIX: Validate critical fields before proceeding
+                missing = []
+                if not session.get('weight'):
+                    missing.append('weight')
+                if not session.get('height'):
+                    missing.append('height')
+                if not session.get('fitness_goal'):
+                    missing.append('fitness goal')
+                
+                if missing:
+                    resp = MessagingResponse()
+                    resp.message(
+                        f"⚠️ I need your {', '.join(missing)} first!\n\n"
+                        f"Example: '75kg, 5'10\", build muscle'"
+                    )
+                    session["onboarding_step"] = "personalize"
+                    session["profile_confirmed"] = False
+                    return str(resp)
+                
+                # Mark profile as completed in database
+                mark_profile_completed(sender)
+                
+                from database_pg import get_user_profile
+                profile = get_user_profile(sender)
+                
+                scheduled_time = None
+                if profile and profile.get('workout_time'):
+                    from database_pg import normalize_workout_time
+                    normalized_time = normalize_workout_time(profile['workout_time'])
+                    
+                    if normalized_time:
+                        if schedule_user_daily_workout(sender, normalized_time):
+                            scheduled_time = normalized_time
+                            print(f"✅ Daily workouts scheduled for {sender} at {normalized_time}")
+                        else:
+                            print(f"⚠️ Failed to schedule daily workouts for {sender}")
+                
+                # Send confirmation message
+                resp = MessagingResponse()
+                
+                confirmation_msg = f"🎯 Perfect, {session['name']}!\n\n"
+                confirmation_msg += f"✅ Profile saved successfully\n"
+                
+                if scheduled_time:
+                    confirmation_msg += f"✅ Daily workouts scheduled at {scheduled_time} IST\n"
+                    confirmation_msg += f"   (Starting from tomorrow)\n\n"
+                
+                confirmation_msg += f"Creating your first workout plan now... 💪"
+                
+                resp.message(confirmation_msg)
+                
+                # ✅ Generate IMMEDIATE first plan (in background)
+                session["messages"].append(HumanMessage(
+                    content=f"Create my first personalized workout plan for today based on my profile."
+                ))
+                
+                threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
+                return str(resp)
+                
+                # ✅ FIX: Add the message to history and generate plan
+                session["messages"].append(HumanMessage(
+                    content=f"Create my first personalized workout plan for today based on my profile."
+                ))
+                
+                # Start plan generation in background
+                threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
+                return str(resp)
+                
+            elif msg_lower in ['no', 'nope', 'change', 'incorrect', 'wrong']:
+                session["confirmation_attempts"] = 0  # Reset
+                resp = MessagingResponse()
+                resp.message(
+                    "📝 What would you like to change?\n\n"
+                    "Examples:\n"
+                    "• 'Change my weight to 75kg'\n"
+                    "• 'Update goal to lose weight'\n"
+                    "• 'My diet is vegetarian'"
+                )
+                session["profile_confirmed"] = True  # Allow them to proceed after changes
+                return str(resp)
+                
+            else:
+                session["confirmation_attempts"] += 1
+                
+                # After 3 attempts, auto-confirm and move on
+                if session["confirmation_attempts"] >= 3:
+                    session["profile_confirmed"] = True
+                    session["confirmation_attempts"] = 0  # Reset
+                    mark_profile_completed(sender)
+                    
+                    resp = MessagingResponse()
+                    resp.message(
+                        "✅ I'll use your profile as-is.\n\n"
+                        "You can always update it later by saying 'change my [field]'.\n\n"
+                        "Creating your first plan... 💪"
+                    )
+                    
+                    # ✅ FIX: Generate plan after auto-confirmation too
+                    session["messages"].append(HumanMessage(
+                        content=f"Create my first personalized workout plan for today based on my profile."
+                    ))
+                    
+                    threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
+                    return str(resp)
+                
+                # Still trying to confirm
+                resp = MessagingResponse()
+                resp.message(
+                    "Please confirm your profile:\n\n"
+                    "Reply:\n"
+                    "• 'Yes' to confirm\n"
+                    "• 'No' to make changes"
+                )
+                return str(resp)
+                
+        # ========== END CONFIRMATION HANDLER ==========
 
         # Check if user wants to view profile
         if msg_lower in ['profile', 'my profile', 'show profile', 'view profile', 'current profile']:

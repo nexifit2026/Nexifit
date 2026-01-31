@@ -53,6 +53,7 @@ TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER", "whatsapp:+919751887676")
 ADMIN_CONTACT = os.environ.get("ADMIN_CONTACT", "admin@nexifit.com")
+TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
 
 WELLNESS_TIP_TEMPLATE_SID = os.environ.get("WELLNESS_TIP_TEMPLATE_SID", "HXf4c280d2f9ce9387e54914cc5ef14e94")
 MOTIVATIONAL_MESSAGE_TEMPLATE_SID = os.environ.get("MOTIVATIONAL_MESSAGE_TEMPLATE_SID", "HX797390caf87f46e260df8fdb97b19d48")
@@ -233,7 +234,7 @@ def send_message_via_twilio(phone_number, message):
     """Send message via Twilio - for scheduled jobs."""
     try:
         client.messages.create(
-            from_=TWILIO_WHATSAPP_NUMBER,
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
             to=phone_number,
             body=message
         )
@@ -301,7 +302,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
                     
                     # Send using template
                     message = client.messages.create(
-                        from_=TWILIO_WHATSAPP_NUMBER,
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                         to=sender,
                         content_sid=MOTIVATIONAL_MESSAGE_TEMPLATE_SID,
                         content_variables=json.dumps(template_vars)
@@ -319,7 +320,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
                     )
                     
                     client.messages.create(
-                        from_=TWILIO_WHATSAPP_NUMBER,
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                         to=sender,
                         body=motivational_msg
                     )
@@ -498,7 +499,7 @@ def send_daily_mental_health_tips():
                     
                     # Send using template
                     message = client.messages.create(
-                        from_=TWILIO_WHATSAPP_NUMBER,
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                         to=phone_number,
                         content_sid=WELLNESS_TIP_TEMPLATE_SID,
                         content_variables=json.dumps(template_vars)
@@ -520,7 +521,7 @@ def send_daily_mental_health_tips():
                     )
                     
                     client.messages.create(
-                        from_=TWILIO_WHATSAPP_NUMBER,
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                         to=phone_number,
                         body=message_body
                     )
@@ -538,7 +539,7 @@ def send_daily_mental_health_tips():
                 )
                 
                 client.messages.create(
-                    from_=TWILIO_WHATSAPP_NUMBER,
+                    messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                     to=phone_number,
                     body=message_body
                 )
@@ -642,7 +643,7 @@ def send_weekly_progress_reports():
             
             # Send message
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=phone_number,
                 body=message
             )
@@ -790,7 +791,7 @@ def send_daily_workout_plan(phone_number):
                 body = chunk
             
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=phone_number,
                 body=body
             )
@@ -1130,7 +1131,7 @@ def handle_tip_admin_commands(sender, incoming_msg):
             )
             
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=phone_number,
                 body=message
             )
@@ -2166,7 +2167,7 @@ def handle_skip_and_generate_plan(sender, session):
                 body = chunk
             
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=sender,
                 body=body
             )
@@ -2175,7 +2176,7 @@ def handle_skip_and_generate_plan(sender, session):
         
         # Send follow-up message
         client.messages.create(
-            from_=TWILIO_WHATSAPP_NUMBER,
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
             to=sender,
             body=(
                 "This is a general plan based on your goal.\n\n"
@@ -2192,7 +2193,7 @@ def handle_skip_and_generate_plan(sender, session):
         print(f"❌ Error sending general plan: {e}")
         try:
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=sender,
                 body="⚠️ Error generating plan. Please try again."
             )
@@ -2378,7 +2379,7 @@ def process_and_reply(sender, is_initial_plan=False, incoming_msg=""):
                 body = chunk
 
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=sender,
                 body=body
             )
@@ -2389,7 +2390,7 @@ def process_and_reply(sender, is_initial_plan=False, incoming_msg=""):
         # Send error message to user
         try:
             client.messages.create(
-                from_=TWILIO_WHATSAPP_NUMBER,
+                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=sender,
                 body="⚠️ Sorry, I encountered an error. Please try asking your question again."
             )

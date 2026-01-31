@@ -269,7 +269,7 @@ def seed_default_mental_health_tips():
         cursor.execute("SELECT COUNT(*) AS count FROM mental_health_tips")
         count = cursor.fetchone()["count"]
 
-        if count > 0:
+        if count > 30:
             print("ℹ️ Mental health tips already exist — skipping seed")
             return
 

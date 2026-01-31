@@ -57,6 +57,8 @@ TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
 
 WELLNESS_TIP_TEMPLATE_SID = os.environ.get("WELLNESS_TIP_TEMPLATE_SID", "HXf4c280d2f9ce9387e54914cc5ef14e94")
 MOTIVATIONAL_MESSAGE_TEMPLATE_SID = os.environ.get("MOTIVATIONAL_MESSAGE_TEMPLATE_SID", "HX797390caf87f46e260df8fdb97b19d48")
+WEEKLY_REPORT_TEMPLATE_SID = os.environ.get("WEEKLY_REPORT_TEMPLATE_SID", "HX87a60c26c2baaba3f1d7356499004f80")
+WEEKLY_REPORT_EMPTY_TEMPLATE_SID = os.environ.get("WEEKLY_REPORT_EMPTY_TEMPLATE_SID", "HXf3542f5d4410b20f9adf8d9dc091cb17")
 
 # Railway environment configuration
 PORT = int(os.environ.get('PORT', 5000))
@@ -586,78 +588,99 @@ def send_weekly_progress_reports():
             phone_number = user['phone_number']
             name = user['name'] or "Champion"
             
-            # Get user's weekly progress
             progress = get_weekly_progress(phone_number)
-            
+
             if not progress:
-                # User hasn't worked out this week
-                message = (
-                    f"📊 *Weekly Progress Report*\n\n"
-                    f"Hey {name}! 👋\n\n"
-                    f"We noticed you haven't logged any workouts this week.\n\n"
-                    f"💪 Even a 15-minute workout counts!\n"
-                    f"Let's get back on track. Ready? 🚀"
-                )
+                try:
+                    template_vars = {
+                        "1": name
+                    }
+
+                    client.messages.create(
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+                        to=phone_number,
+                        content_sid=WEEKLY_REPORT_EMPTY_TEMPLATE_SID,
+                        content_variables=json.dumps(template_vars)
+                    )
+
+                    print(f"✅ Weekly empty report (template) sent to {phone_number}")
+
+                except Exception as template_error:
+                    print(f"⚠️ Template failed for {phone_number}, fallback used: {template_error}")
+
+                    fallback_message = (
+                        f"📊 Weekly Progress Report\n\n"
+                        f"Hey {name}! 👋\n\n"
+                        f"We noticed you haven't logged any workouts this week.\n\n"
+                        f"💪 Even a 15-minute workout counts!\n"
+                        f"Let's get back on track. Ready? 🚀"
+                    )
+
+                    client.messages.create(
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+                        to=phone_number,
+                        body=fallback_message
+                    )
+
             else:
-                # User has workout data
                 workouts = progress['workouts_completed']
                 minutes = int(progress['total_minutes'])
                 calories = int(progress['total_calories'])
                 progress_pct = round(progress['avg_progress'], 1)
                 goal = progress['goal']
-                
-                # Format time
+
                 hours = minutes // 60
                 remaining_mins = minutes % 60
                 time_str = f"{hours}h {remaining_mins}m" if hours > 0 else f"{remaining_mins} min"
-                
-                # Choose emoji based on performance
-                if workouts >= 5:
-                    emoji = "🔥"
-                    praise = "Outstanding"
-                elif workouts >= 3:
-                    emoji = "💪"
-                    praise = "Great job"
-                else:
-                    emoji = "👍"
-                    praise = "Good start"
-                
-                message = (
-                    f"📊 *Your Weekly Progress Report*\n\n"
-                    f"{emoji} *{praise}, {name}!*\n\n"
-                    f"━━━━━━━━━━━━━━━━\n"
-                    f"📅 *This Week's Stats:*\n\n"
-                    f"✅ Workouts: *{workouts}*\n"
-                    f"⏱️ Time: *{time_str}*\n"
-                    f"🔥 Calories: *~{calories} kcal*\n"
-                    f"📈 Progress: *{progress_pct}%* closer\n\n"
-                    f"🎯 *Goal:* {goal}\n\n"
-                    f"━━━━━━━━━━━━━━━━\n"
-                    f"Keep the momentum! 🚀"
-                )
 
-                # Streak report add on
-                streak_data = get_user_streak(phone_number)
-                if streak_data['current_streak'] > 0:
-                    streak_emoji = "🔥" if streak_data['current_streak'] >= 7 else "💪"
-                    message += f"{streak_emoji} *Current Streak:* {streak_data['current_streak']} days\n\n"
-                
-                message += "━━━━━━━━━━━━━━━━\nKeep the momentum! 🚀"
-            
-            # Send message
-            client.messages.create(
-                messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
-                to=phone_number,
-                body=message
-            )
-            
+                try:
+                    # Preferred: Template
+                    template_vars = {
+                        "1": name,
+                        "2": str(workouts),
+                        "3": time_str,
+                        "4": str(calories),
+                        "5": str(progress_pct),
+                        "6": f"🎯 Goal: {goal}"
+                    }
+
+                    client.messages.create(
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+                        to=phone_number,
+                        content_sid=WEEKLY_REPORT_TEMPLATE_SID,
+                        content_variables=json.dumps(template_vars)
+                    )
+
+                    print(f"✅ Weekly progress report (template) sent to {phone_number}")
+
+                except Exception as template_error:
+                    print(f"⚠️ Template failed for {phone_number}, fallback used: {template_error}")
+
+                    fallback_message = (
+                        f"📊 Weekly Progress Report\n\n"
+                        f"Hi {name}, great job this week!\n\n"
+                        f"Workouts: {workouts}\n"
+                        f"Time: {time_str}\n"
+                        f"Calories: {calories} kcal\n"
+                        f"Progress: {progress_pct}% closer to your goal\n\n"
+                        f"🎯 Goal: {goal}\n\n"
+                        f"Keep it up! 💪"
+                    )
+
+                    client.messages.create(
+                        messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+                        to=phone_number,
+                        body=fallback_message
+                    )
+
             print(f"✅ Sent report to {phone_number}")
             success_count += 1
-            
+
         except Exception as e:
-            print(f"❌ Error sending to {phone_number}: {e}")
+            print(f"❌ Error sending weekly report to {phone_number}: {e}")
     
     print(f"📊 Sent {success_count} reports\n{'='*50}\n")
+
 
 def send_daily_workout_plan(phone_number):
     """

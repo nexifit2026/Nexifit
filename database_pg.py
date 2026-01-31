@@ -234,6 +234,53 @@ def clean_expired_users():
 # MENTAL HEALTH TIPS FUNCTIONS
 # =====================
 
+def seed_default_mental_health_tips():
+    tips = [
+        # Motivation
+        ("Start your day with gratitude. Name three things you're thankful for today.", "motivation"),
+        ("Progress, not perfection. Every small step counts.", "motivation"),
+        ("You are stronger than you think. Showing up is already a win.", "motivation"),
+        ("Celebrate small wins today. Consistency beats intensity.", "motivation"),
+
+        # Stress
+        ("Take 5 deep breaths. Inhale 4s, hold 4s, exhale 6s.", "stress"),
+        ("Stress is information, not danger. Pause before reacting.", "stress"),
+        ("A short walk can reset your nervous system.", "stress"),
+
+        # Mindfulness
+        ("Be present for one full minute. Just breathe.", "mindfulness"),
+        ("Notice one thing you can see, hear, and feel right now.", "mindfulness"),
+        ("Mindfulness is awareness without judgment.", "mindfulness"),
+
+        # Sleep
+        ("Aim for 7–9 hours of sleep. Recovery is part of progress.", "sleep"),
+        ("Dim lights before bed to help your body unwind.", "sleep"),
+
+        # Positivity
+        ("Speak to yourself like you would to a good friend.", "positivity"),
+        ("Negative thoughts are not facts.", "positivity"),
+        ("You are allowed to rest without guilt.", "positivity"),
+    ]
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check if tips already exist
+        cursor.execute("SELECT COUNT(*) AS count FROM mental_health_tips")
+        count = cursor.fetchone()["count"]
+
+        if count > 0:
+            print("ℹ️ Mental health tips already exist — skipping seed")
+            return
+
+        for tip_text, category in tips:
+            cursor.execute("""
+                INSERT INTO mental_health_tips (tip_text, category)
+                VALUES (%s, %s)
+            """, (tip_text, category))
+
+        print(f"✅ Seeded {len(tips)} mental health tips")
+
 def add_mental_health_tip(tip_text, category='general'):
     """Add a new mental health tip."""
     try:

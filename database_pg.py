@@ -236,30 +236,65 @@ def clean_expired_users():
 
 def seed_default_mental_health_tips():
     tips = [
-        # Motivation
-        ("Start your day with gratitude. Name three things you're thankful for today.", "motivation"),
-        ("Progress, not perfection. Every small step counts.", "motivation"),
-        ("You are stronger than you think. Showing up is already a win.", "motivation"),
-        ("Celebrate small wins today. Consistency beats intensity.", "motivation"),
-
-        # Stress
-        ("Take 5 deep breaths. Inhale 4s, hold 4s, exhale 6s.", "stress"),
-        ("Stress is information, not danger. Pause before reacting.", "stress"),
-        ("A short walk can reset your nervous system.", "stress"),
-
-        # Mindfulness
-        ("Be present for one full minute. Just breathe.", "mindfulness"),
-        ("Notice one thing you can see, hear, and feel right now.", "mindfulness"),
-        ("Mindfulness is awareness without judgment.", "mindfulness"),
-
-        # Sleep
-        ("Aim for 7–9 hours of sleep. Recovery is part of progress.", "sleep"),
-        ("Dim lights before bed to help your body unwind.", "sleep"),
-
-        # Positivity
-        ("Speak to yourself like you would to a good friend.", "positivity"),
-        ("Negative thoughts are not facts.", "positivity"),
-        ("You are allowed to rest without guilt.", "positivity"),
+        # Motivation (10 tips)
+        ("Start your day with gratitude. Name three things you're thankful for today. Small moments of appreciation can shift your entire mindset.", "motivation"),
+        ("Remember: Progress, not perfection. Every small step forward counts, even on days when you feel you're barely moving.", "motivation"),
+        ("You are stronger than you think. The fact that you're here, trying, is proof of your resilience and courage.", "motivation"),
+        ("Celebrate small wins today. Did you drink water? Take a walk? That's progress worth acknowledging.", "motivation"),
+        ("Your mental health journey is just as important as your physical fitness. Both deserve equal attention and care.", "motivation"),
+        ("Be patient with yourself. Growth takes time, and setbacks are part of the process, not signs of failure.", "motivation"),
+        ("You don't have to be positive all the time. It's okay to have difficult days. What matters is that you keep going.", "motivation"),
+        ("Your worth is not determined by your productivity. Rest is not laziness; it's essential for growth.", "motivation"),
+        ("Every expert was once a beginner. Trust the process and keep showing up for yourself.", "motivation"),
+        ("You are doing better than you think. Sometimes we can't see our own progress while we're in the middle of it.", "motivation"),
+        
+        # Stress Management (10 tips)
+        ("Take 5 deep breaths right now. Inhale for 4 counts, hold for 4, exhale for 6. Notice how your body feels after.", "stress"),
+        ("When overwhelmed, try the 5-4-3-2-1 technique: Name 5 things you see, 4 you can touch, 3 you hear, 2 you smell, 1 you taste.", "stress"),
+        ("Stress is normal, but chronic stress isn't. If you're feeling overwhelmed, it's okay to ask for help or take a break.", "stress"),
+        ("Physical exercise is a powerful stress reliever. Even a 10-minute walk can significantly reduce stress hormones.", "stress"),
+        ("Write down what's stressing you. Sometimes seeing worries on paper helps you realize they're more manageable than they feel.", "stress"),
+        ("Practice saying 'no' to protect your energy. You can't pour from an empty cup.", "stress"),
+        ("Schedule 'worry time' - allow yourself 15 minutes to worry, then consciously move on. Don't let stress consume your whole day.", "stress"),
+        ("Connect with someone you trust. Talking about stress often makes it feel lighter and more manageable.", "stress"),
+        ("Limit caffeine when stressed. While it might feel helpful, it can actually increase anxiety and stress levels.", "stress"),
+        ("Remember: You can only control your actions, not outcomes. Focus your energy on what's within your control.", "stress"),
+        
+        # Mindfulness (10 tips)
+        ("Take a mindful minute. Close your eyes and focus only on your breath. Let thoughts pass like clouds in the sky.", "mindfulness"),
+        ("Eat one meal today without distractions. Notice the flavors, textures, and how your body feels as you eat.", "mindfulness"),
+        ("Practice body scanning: Starting from your toes, slowly bring awareness to each part of your body, releasing tension.", "mindfulness"),
+        ("Be present in simple moments. Feel the water when you wash your hands, notice the warmth of the sun, hear the birds.", "mindfulness"),
+        ("Mindfulness isn't about stopping thoughts. It's about observing them without judgment and gently returning to the present.", "mindfulness"),
+        ("Try a walking meditation today. Focus on each step, the movement of your body, the feeling of your feet touching the ground.", "mindfulness"),
+        ("When emotions feel intense, pause and name them. 'I'm feeling anxious' creates distance and helps you respond vs. react.", "mindfulness"),
+        ("Practice loving-kindness meditation: Wish yourself well, then extend those wishes to others. Start with 'May I be happy and healthy.'", "mindfulness"),
+        ("Notice one beautiful thing today. A flower, a smile, a sunset. Let yourself fully experience that moment of beauty.", "mindfulness"),
+        ("Your breath is always with you as an anchor to the present moment. When lost in thoughts, return to your breathing.", "mindfulness"),
+        
+        # Sleep & Recovery (10 tips)
+        ("Aim for 7-9 hours of sleep tonight. Quality sleep is when your body repairs muscles and your mind processes emotions.", "sleep"),
+        ("Create a wind-down routine 30 minutes before bed. Dim lights, avoid screens, and signal your body it's time to rest.", "sleep"),
+        ("Your bedroom should be cool, dark, and quiet. These conditions promote deeper, more restorative sleep.", "sleep"),
+        ("Avoid screens 1 hour before bed. Blue light suppresses melatonin and can delay sleep by up to 3 hours.", "sleep"),
+        ("If you can't sleep, don't fight it. Get up, do something calming, and return to bed when you feel sleepy.", "sleep"),
+        ("Consistency matters: Try to wake up and go to bed at the same time every day, even on weekends.", "sleep"),
+        ("Naps can be helpful, but keep them under 30 minutes and before 3 PM to avoid disrupting night sleep.", "sleep"),
+        ("Physical activity helps sleep quality, but avoid intense workouts 3 hours before bed as they can be energizing.", "sleep"),
+        ("Write down tomorrow's tasks before bed. This 'brain dump' can prevent late-night worrying and improve sleep.", "sleep"),
+        ("Recovery isn't lazy. Rest days allow your body and mind to rebuild stronger. Honor your need for recovery.", "sleep"),
+        
+        # Positivity & Self-Compassion (10 tips)
+        ("Speak to yourself like you would to a good friend. Would you be this harsh to someone you care about?", "positivity"),
+        ("Negative thoughts are not facts. Challenge them: What evidence supports this? What evidence contradicts it?", "positivity"),
+        ("Start a gratitude journal. Write 3 good things that happened today, no matter how small.", "positivity"),
+        ("Practice self-compassion: Acknowledge your pain, remember you're not alone, and treat yourself with kindness.", "positivity"),
+        ("Your feelings are valid, but they don't define your reality. It's okay to feel bad and still be okay.", "positivity"),
+        ("Compare yourself only to who you were yesterday. Everyone's journey is different and uniquely their own.", "positivity"),
+        ("Perfectionism is a cage. Embrace 'good enough' and free yourself from impossible standards.", "positivity"),
+        ("Surround yourself with positivity. The energy you consume matters - choose content and people that uplift you.", "positivity"),
+        ("It's okay to not be okay. Mental health struggles don't make you weak; seeking help makes you strong.", "positivity"),
+        ("Celebrate your uniqueness. What makes you different is what makes you valuable. You are enough, exactly as you are.", "positivity"),
     ]
 
     with get_db_connection() as conn:
@@ -269,7 +304,7 @@ def seed_default_mental_health_tips():
         cursor.execute("SELECT COUNT(*) AS count FROM mental_health_tips")
         count = cursor.fetchone()["count"]
 
-        if count > 30:
+        if count > 70:
             print("ℹ️ Mental health tips already exist — skipping seed")
             return
 

@@ -3523,8 +3523,6 @@ def whatsapp_webhook():
                     scheduled_time = None
                 
                     if profile and profile.get('workout_time'):
-                        from database_pg import save_workout_schedule, normalize_workout_time
-                
                         normalized_time = normalize_workout_time(profile['workout_time'])
                 
                         if normalized_time:

@@ -3495,7 +3495,24 @@ def whatsapp_webhook():
                     session["profile_confirmed"] = True
                     session["confirmation_attempts"] = 0  # Reset
                     mark_profile_completed(sender)
-                    
+
+                    profile = get_user_profile(sender)
+                    scheduled_time = None
+                
+                    if profile and profile.get('workout_time'):
+                        from database_pg import save_workout_schedule, normalize_workout_time
+                
+                        normalized_time = normalize_workout_time(profile['workout_time'])
+                
+                        if normalized_time:
+                            save_workout_schedule(sender, normalized_time)
+                
+                            if schedule_user_daily_workout(sender, normalized_time):
+                                scheduled_time = normalized_time
+                                print(f"✅ Auto-scheduled daily workouts for {sender} at {normalized_time}")
+                            else:
+                                print(f"⚠️ Failed to auto-schedule workouts for {sender}")
+                                
                     resp = MessagingResponse()
                     resp.message(
                         "✅ I'll use your profile as-is.\n\n"

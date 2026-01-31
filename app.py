@@ -43,7 +43,7 @@ from database_pg import (
     save_workout_schedule, normalize_workout_time, 
     get_all_scheduled_users, update_schedule_job_id,
     mark_plan_sent, deactivate_workout_schedule,
-    get_user_workout_schedule, initialize_workout_schedule_table, bootstrap_database
+    get_user_workout_schedule, initialize_workout_schedule_table, bootstrap_database, seed_default_mental_health_tips
 )
 
 # -------------------------
@@ -184,6 +184,9 @@ def init_scheduler():
 
         print("🛠 Bootstrapping database (Railway-safe)...")
         bootstrap_database()
+
+        print("🌱 Seeding mental health tips (if empty)...")
+        seed_default_mental_health_tips()
 
         print("🛠 Initializing workout schedule table...")
         initialize_workout_schedule_table()

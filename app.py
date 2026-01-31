@@ -3436,6 +3436,7 @@ def whatsapp_webhook():
                     normalized_time = normalize_workout_time(profile['workout_time'])
                     
                     if normalized_time:
+                        save_workout_schedule(sender, normalized_time)
                         if schedule_user_daily_workout(sender, normalized_time):
                             scheduled_time = normalized_time
                             print(f"✅ Daily workouts scheduled for {sender} at {normalized_time}")

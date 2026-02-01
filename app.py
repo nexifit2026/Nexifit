@@ -22,7 +22,7 @@ import atexit
 # Import database functions
 from database_pg import (
     is_user_authorized, is_admin, log_auth_attempt,
-    add_user, remove_user, reactivate_user, list_all_users,
+    add_user, remove_user, delete_user_permanently, reactivate_user, list_all_users,
     get_user_info, clean_expired_users,
     # Mental health tips functions
     add_mental_health_tip, get_all_mental_health_tips, deactivate_tip, activate_tip,

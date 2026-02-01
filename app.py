@@ -1207,7 +1207,26 @@ def handle_admin_command(sender, incoming_msg):
         
         success, message = add_user(phone, name, days)
         return f"{'✅' if success else '⚠️'} {message}"
-    
+
+    # DELETE USER PERMANENTLY: ADMIN DELETE whatsapp:+1234567890
+    elif msg.startswith("ADMIN DELETE"):
+        parts = incoming_msg.split()
+        if len(parts) < 3:
+            return "⚠️ Usage: ADMIN DELETE <phone_number>\n\n⚠️ WARNING: This PERMANENTLY deletes the user!"
+        
+        phone = parts[2]
+        
+        try:
+            # Confirm it's admin
+            if not is_admin(sender):
+                return "⛔ Only admins can permanently delete users"
+            
+            # Delete from database
+            success, message = delete_user_permanently(phone)
+            return f"{'✅' if success else '⚠️'} {message}"
+        except Exception as e:
+            return f"❌ Error: {str(e)}"
+            
     # REMOVE USER: ADMIN REMOVE whatsapp:+1234567890
     elif msg.startswith("ADMIN REMOVE"):
         parts = incoming_msg.split()
@@ -1217,7 +1236,7 @@ def handle_admin_command(sender, incoming_msg):
         phone = parts[2]
         success, message = remove_user(phone)
         return f"{'✅' if success else '⚠️'} {message}"
-    
+            
     # REACTIVATE USER: ADMIN REACTIVATE whatsapp:+1234567890
     elif msg.startswith("ADMIN REACTIVATE"):
         parts = incoming_msg.split()
@@ -1331,33 +1350,6 @@ def handle_admin_command(sender, incoming_msg):
         except Exception as e:
             return f"❌ Error: {str(e)}"
             
-    # ADMIN HELP
-    elif msg.startswith("ADMIN HELP") or msg == "ADMIN":
-        return (
-            "🔐 *Admin Commands:*\n\n"
-            "📱 USER MANAGEMENT:\n"
-            "ADMIN ADD <phone> [name] [days]\n"
-            "ADMIN REMOVE <phone>\n"
-            "ADMIN REACTIVATE <phone>\n"
-            "ADMIN LIST\n"
-            "ADMIN INFO <phone>\n\n"
-            "💭 MENTAL HEALTH TIPS:\n"
-            "ADMIN TIP_HELP\n\n"
-            "📊 REPORTS:\n"
-            "ADMIN TEST_REPORT <phone>\n"
-            "ADMIN SEND_REPORTS\n\n"
-            "💪 DAILY WORKOUTS:\n"
-            "ADMIN SCHEDULES\n"
-            "ADMIN TEST_DAILY <phone>\n"
-            "ADMIN RESCHEDULE_ALL\n"
-            "ADMIN DISABLE_DAILY <phone>\n\n"
-            "⏰ SCHEDULER:\n"
-            "ADMIN SCHEDULER_STATUS\n"
-            "ADMIN TEST_TIPS_NOW\n"
-            "ADMIN TEST_REPORT_NOW\n\n"
-            "Example:\n"
-            "ADMIN ADD whatsapp:+1234567890 John 30"
-        )
         
     # ✅ NEW: LIST WORKOUT SCHEDULES
     elif msg == "ADMIN SCHEDULES":
@@ -1416,7 +1408,35 @@ def handle_admin_command(sender, incoming_msg):
         
         return f"{'✅' if success else '⚠️'} {message}"
 
-    
+    # ADMIN HELP
+    elif msg.startswith("ADMIN HELP") or msg == "ADMIN":
+        return (
+            "🔐 *Admin Commands:*\n\n"
+            "📱 USER MANAGEMENT:\n"
+            "ADMIN ADD <phone> [name] [days]\n"
+            "ADMIN REMOVE <phone>\n"
+            "ADMIN DELETE <phone> (⚠️ PERMANENT)\n"
+            "ADMIN REACTIVATE <phone>\n"
+            "ADMIN LIST\n"
+            "ADMIN INFO <phone>\n\n"
+            "💭 MENTAL HEALTH TIPS:\n"
+            "ADMIN TIP_HELP\n\n"
+            "📊 REPORTS:\n"
+            "ADMIN TEST_REPORT <phone>\n"
+            "ADMIN SEND_REPORTS\n\n"
+            "💪 DAILY WORKOUTS:\n"
+            "ADMIN SCHEDULES\n"
+            "ADMIN TEST_DAILY <phone>\n"
+            "ADMIN RESCHEDULE_ALL\n"
+            "ADMIN DISABLE_DAILY <phone>\n\n"
+            "⏰ SCHEDULER:\n"
+            "ADMIN SCHEDULER_STATUS\n"
+            "ADMIN TEST_TIPS_NOW\n"
+            "ADMIN TEST_REPORT_NOW\n\n"
+            "Example:\n"
+            "ADMIN ADD whatsapp:+1234567890 John 30"
+        )
+        
     # ✅ FIX 4: Return error if command not recognized
     else:
         return "⚠️ Unknown admin command. Type 'ADMIN HELP' for available commands."
@@ -3331,16 +3351,6 @@ def whatsapp_webhook():
                 "Example: '30 minutes, home, flexible'"
             )
             return str(resp)
-
-            from database_pg import save_workout_schedule
-            
-            workout_time = session.get("workout_time", "Morning")
-            success, normalized_time = save_workout_schedule(sender, workout_time)
-            
-            if success:
-                print(f"✅ Workout schedule saved: {normalized_time}")
-            else:
-                print(f"⚠️ Failed to save workout schedule")
             
             # Save complete profile to database
             profile_data = {
@@ -3427,9 +3437,9 @@ def whatsapp_webhook():
             
             if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok', 'okay', 'confirm']:
                 session["profile_confirmed"] = True
-                session["confirmation_attempts"] = 0  # Reset
+                session["confirmation_attempts"] = 0
                 
-                # ✅ FIX: Validate critical fields before proceeding
+                # Validate required fields
                 missing = []
                 if not session.get('weight'):
                     missing.append('weight')
@@ -3448,25 +3458,33 @@ def whatsapp_webhook():
                     session["profile_confirmed"] = False
                     return str(resp)
                 
-                # Mark profile as completed in database
+                # Mark profile completed in DB
                 mark_profile_completed(sender)
                 
+                # ✅ CRITICAL FIX: Save workout schedule to database
                 profile = get_user_profile(sender)
-                
                 scheduled_time = None
+                
                 if profile and profile.get('workout_time'):
-                    from database_pg import normalize_workout_time
                     normalized_time = normalize_workout_time(profile['workout_time'])
                     
                     if normalized_time:
-                        schedule_saved = save_workout_schedule(sender, normalized_time)
-                        if schedule_user_daily_workout(sender, normalized_time):
-                            scheduled_time = normalized_time
-                            print(f"✅ Daily workouts scheduled for {sender} at {normalized_time}")
+                        # STEP 1: Save to database
+                        success, saved_time = save_workout_schedule(sender, normalized_time)
+                        
+                        if success:
+                            print(f"✅ Saved schedule to DB: {sender} at {normalized_time}")
+                            
+                            # STEP 2: Schedule APScheduler job
+                            if schedule_user_daily_workout(sender, normalized_time):
+                                scheduled_time = normalized_time
+                                print(f"✅ Scheduler job created for {sender}")
+                            else:
+                                print(f"⚠️ Scheduler job failed for {sender}")
                         else:
-                            print(f"⚠️ Failed to schedule daily workouts for {sender}")
+                            print(f"⚠️ DB save failed for {sender}")
                 
-                # Send confirmation message
+                # Send confirmation
                 resp = MessagingResponse()
                 
                 confirmation_msg = f"🎯 Perfect, {session['name']}!\n\n"
@@ -3474,13 +3492,15 @@ def whatsapp_webhook():
                 
                 if scheduled_time:
                     confirmation_msg += f"✅ Daily workouts scheduled at {scheduled_time} IST\n"
-                    confirmation_msg += f"   (Starting from tomorrow)\n\n"
+                    confirmation_msg += f"   (You'll receive plans automatically starting tomorrow)\n\n"
+                else:
+                    confirmation_msg += f"⚠️ Auto-scheduling unavailable, but you can request plans anytime\n\n"
                 
                 confirmation_msg += f"Creating your first workout plan now... 💪"
                 
                 resp.message(confirmation_msg)
                 
-                # ✅ Generate IMMEDIATE first plan (in background)
+                # Generate first plan
                 session["messages"].append(HumanMessage(
                     content=f"Create my first personalized workout plan for today based on my profile."
                 ))
@@ -3488,17 +3508,8 @@ def whatsapp_webhook():
                 threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
                 return str(resp)
                 
-                # ✅ FIX: Add the message to history and generate plan
-                session["messages"].append(HumanMessage(
-                    content=f"Create my first personalized workout plan for today based on my profile."
-                ))
-                
-                # Start plan generation in background
-                threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
-                return str(resp)
-                
             elif msg_lower in ['no', 'nope', 'change', 'incorrect', 'wrong']:
-                session["confirmation_attempts"] = 0  # Reset
+                session["confirmation_attempts"] = 0
                 resp = MessagingResponse()
                 resp.message(
                     "📝 What would you like to change?\n\n"
@@ -3507,49 +3518,41 @@ def whatsapp_webhook():
                     "• 'Update goal to lose weight'\n"
                     "• 'My diet is vegetarian'"
                 )
-                session["profile_confirmed"] = True  # Allow them to proceed after changes
+                session["profile_confirmed"] = True  # Allow changes
                 return str(resp)
                 
             else:
+                # Unrecognized response - increment counter
                 session["confirmation_attempts"] += 1
                 
-                # After 3 attempts, auto-confirm and move on
                 if session["confirmation_attempts"] >= 3:
+                    # Auto-confirm after 3 failed attempts
                     session["profile_confirmed"] = True
-                    session["confirmation_attempts"] = 0  # Reset
+                    session["confirmation_attempts"] = 0
                     mark_profile_completed(sender)
-
+                    
+                    # Try to save schedule
                     profile = get_user_profile(sender)
-                    scheduled_time = None
-                
                     if profile and profile.get('workout_time'):
                         normalized_time = normalize_workout_time(profile['workout_time'])
-                
                         if normalized_time:
-                            schedule_saved = save_workout_schedule(sender, normalized_time)
-                
-                            if schedule_user_daily_workout(sender, normalized_time):
-                                scheduled_time = normalized_time
-                                print(f"✅ Auto-scheduled daily workouts for {sender} at {normalized_time}")
-                            else:
-                                print(f"⚠️ Failed to auto-schedule workouts for {sender}")
-                                
+                            save_workout_schedule(sender, normalized_time)
+                            schedule_user_daily_workout(sender, normalized_time)
+                    
                     resp = MessagingResponse()
                     resp.message(
                         "✅ I'll use your profile as-is.\n\n"
-                        "You can always update it later by saying 'change my [field]'.\n\n"
+                        "You can update it anytime by saying 'change my [field]'.\n\n"
                         "Creating your first plan... 💪"
                     )
                     
-                    # ✅ FIX: Generate plan after auto-confirmation too
                     session["messages"].append(HumanMessage(
-                        content=f"Create my first personalized workout plan for today based on my profile."
+                        content=f"Create my first personalized workout plan for today."
                     ))
-                    
-                    threading.Thread(target=process_and_reply, args=(sender, True, incoming_msg)).start()
+                    threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
                     return str(resp)
                 
-                # Still trying to confirm
+                # Still waiting for yes/no
                 resp = MessagingResponse()
                 resp.message(
                     "Please confirm your profile:\n\n"
@@ -3558,7 +3561,7 @@ def whatsapp_webhook():
                     "• 'No' to make changes"
                 )
                 return str(resp)
-                
+        
         # ========== END CONFIRMATION HANDLER ==========
 
         # Check if user wants to view profile

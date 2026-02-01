@@ -3380,56 +3380,9 @@ def whatsapp_webhook():
     if session["onboarding_step"] == "done":
         
         msg_lower = incoming_msg.lower().strip()
-
-        if any(keyword in msg_lower for keyword in ["remind", "set reminder", "alert", "alarm", "schedule", "notification"]):
-            # Parse with LLM + fallback to regex
-            task, run_time = parse_reminder_message(incoming_msg, llm)
-            
-            if task and run_time:
-                # Successfully parsed reminder
-                success = schedule_reminder(sender, task, run_time)
-                
-                if success:
-                    # Calculate time difference for user-friendly display
-                    now_ist = datetime.now(IST)
-                    time_diff = run_time - now_ist
-                    total_seconds = int(time_diff.total_seconds())
-                    hours = total_seconds // 3600
-                    minutes = (total_seconds % 3600) // 60
-                    
-                    if hours > 0:
-                        time_str = f"in {hours}h {minutes}m"
-                    else:
-                        time_str = f"in {minutes} minutes"
-                    
-                    resp = MessagingResponse()
-                    resp.message(
-                        f"✅ Reminder set!\n\n"
-                        f"📝 Task: {task}\n"
-                        f"⏰ Time: {time_str}\n"
-                        f"🕐 {run_time.strftime('%I:%M %p IST')}"
-                    )
-                    return str(resp)
-                else:
-                    resp = MessagingResponse()
-                    resp.message("❌ Failed to set reminder. Please try again.")
-                    return str(resp)
-            else:
-                # LLM couldn't parse - show examples
-                resp = MessagingResponse()
-                resp.message(
-                    "⏰ I couldn't parse your reminder. Try being more specific!\n\n"
-                    "Examples that work:\n"
-                    "   • Remind me to drink water in 30 minutes\n"
-                    "   • Set a reminder at 3:30pm for workout\n"
-                    "   • I want a reminder about gym at 5pm\n"
-                    "   • Remind me tomorrow at 8am about breakfast\n"
-                    "   • Alert me in 2 hours to take medication\n"
-                    "   • Schedule a reminder for lunch in 1 hour"
-                )
-                return str(resp)
         
         # ========== PROFILE CONFIRMATION HANDLER ==========
+        # ✅ MUST RUN FIRST - BEFORE FITNESS CHECK
         if not session.get("profile_confirmed") and session.get("profile_completed"):
             # Track confirmation attempts
             if "confirmation_attempts" not in session:
@@ -3499,15 +3452,16 @@ def whatsapp_webhook():
                 confirmation_msg += f"Creating your first workout plan now... 💪"
                 
                 resp.message(confirmation_msg)
-                
+
                 # Generate first plan
                 session["messages"].append(HumanMessage(
                     content=f"Create my first personalized workout plan for today based on my profile."
                 ))
                 
                 threading.Thread(target=process_and_reply, args=(sender, True, "")).start()
-                return str(resp)
                 
+                return str(resp)
+
             elif msg_lower in ['no', 'nope', 'change', 'incorrect', 'wrong']:
                 session["confirmation_attempts"] = 0
                 resp = MessagingResponse()
@@ -3563,6 +3517,15 @@ def whatsapp_webhook():
                 return str(resp)
         
         # ========== END CONFIRMATION HANDLER ==========
+        
+        # ✅ NOW CHECK IF FITNESS RELATED (AFTER CONFIRMATION)
+        if not is_fitness_related(incoming_msg):
+            resp = MessagingResponse()
+            resp.message(
+                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
+                "Feel free to ask me anything about your fitness journey! 💪"
+            )
+            return str(resp)
 
         # Check if user wants to view profile
         if msg_lower in ['profile', 'my profile', 'show profile', 'view profile', 'current profile']:
@@ -3695,15 +3658,6 @@ def whatsapp_webhook():
                     "Just tell me what to change!"
                 )
                 return str(resp)
-
-        # IMPROVED: More lenient fitness topic check
-        if not is_fitness_related(incoming_msg):
-            resp = MessagingResponse()
-            resp.message(
-                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
-                "Feel free to ask me anything about your fitness journey! 💪"
-            )
-            return str(resp)
 
         # Add message to history and process
         session["messages"].append(HumanMessage(content=incoming_msg))

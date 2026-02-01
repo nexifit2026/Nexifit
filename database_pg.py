@@ -162,6 +162,101 @@ def remove_user(phone_number):
         else:
             return False, "User not found"
 
+def delete_user_permanently(phone_number):
+    """
+    PERMANENTLY delete a user and all associated data.
+    
+    ⚠️ WARNING: This action cannot be undone!
+    
+    This will delete:
+    - User profile
+    - Workout logs & streaks
+    - Mental health tip history
+    - Daily workout schedule
+    - Auth logs
+    - Authorized user record
+    
+    Args:
+        phone_number (str): User's phone number
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get user info before deletion (for logging)
+            cursor.execute('''
+                SELECT name, date_added FROM authorized_users 
+                WHERE phone_number = %s
+            ''', (phone_number,))
+            
+            user_info = cursor.fetchone()
+            
+            if not user_info:
+                return False, f"User {phone_number} not found in database"
+            
+            user_name = user_info['name'] or "Unknown"
+            
+            # Delete in correct order (respecting foreign key constraints)
+            # Child tables first, parent tables last
+            
+            print(f"🗑️ Deleting all data for {phone_number} ({user_name})...")
+            
+            # 1. Daily workout schedule
+            cursor.execute('DELETE FROM daily_workout_schedule WHERE phone_number = %s', (phone_number,))
+            schedule_deleted = cursor.rowcount
+            print(f"   - Deleted {schedule_deleted} workout schedules")
+            
+            # 2. Tip history
+            cursor.execute('DELETE FROM user_tip_history WHERE phone_number = %s', (phone_number,))
+            tip_history_deleted = cursor.rowcount
+            print(f"   - Deleted {tip_history_deleted} tip history records")
+            
+            # 3. Tip preferences
+            cursor.execute('DELETE FROM user_tip_preferences WHERE phone_number = %s', (phone_number,))
+            tip_prefs_deleted = cursor.rowcount
+            print(f"   - Deleted {tip_prefs_deleted} tip preference records")
+            
+            # 4. Workout streaks
+            cursor.execute('DELETE FROM workout_streaks WHERE phone_number = %s', (phone_number,))
+            streaks_deleted = cursor.rowcount
+            print(f"   - Deleted {streaks_deleted} streak records")
+            
+            # 5. Workout logs
+            cursor.execute('DELETE FROM workout_logs WHERE phone_number = %s', (phone_number,))
+            logs_deleted = cursor.rowcount
+            print(f"   - Deleted {logs_deleted} workout logs")
+            
+            # 6. User profile
+            cursor.execute('DELETE FROM user_profiles WHERE phone_number = %s', (phone_number,))
+            profile_deleted = cursor.rowcount
+            print(f"   - Deleted {profile_deleted} user profiles")
+            
+            # 7. Auth logs (optional - you might want to keep these for security audit)
+            # Uncomment next line if you want to delete auth logs too
+            # cursor.execute('DELETE FROM auth_logs WHERE phone_number = %s', (phone_number,))
+            
+            # 8. Finally, delete from authorized_users (parent table)
+            cursor.execute('DELETE FROM authorized_users WHERE phone_number = %s', (phone_number,))
+            user_deleted = cursor.rowcount
+            print(f"   - Deleted {user_deleted} authorized user records")
+            
+            total_records = (schedule_deleted + tip_history_deleted + tip_prefs_deleted + 
+                           streaks_deleted + logs_deleted + profile_deleted + user_deleted)
+            
+            if user_deleted > 0:
+                print(f"✅ Successfully deleted {phone_number} ({user_name}) - {total_records} total records removed")
+                return True, f"User {user_name} ({phone_number}) permanently deleted\n({total_records} records removed)"
+            else:
+                return False, f"Failed to delete user from authorized_users table"
+                
+    except Exception as e:
+        print(f"❌ Error deleting user {phone_number}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"Delete error: {str(e)}"
 
 def reactivate_user(phone_number):
     """Reactivate a previously deactivated user."""

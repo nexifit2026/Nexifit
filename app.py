@@ -4,7 +4,7 @@ import threading
 import sys
 import json
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
@@ -251,6 +251,8 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
     """
     Schedule motivational message after workout using Twilio template.
     Falls back to regular message if template unavailable.
+    
+    HANDLES MISSING DATA WITH SAFE DEFAULTS
     """
     global scheduler
     
@@ -264,7 +266,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
         
         # Build streak message
         streak_message = ""
-        streak_info = session.get('latest_streak')
+        streak_info = session.get('latest_streak')  # May be None if extraction failed
         
         if streak_info:
             current = streak_info['current']
@@ -281,17 +283,23 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
             if streak_info['broke']:
                 streak_message += "\n\n🌱 New streak started! Let's build it up again!"
         else:
-            streak_message = "💪 Great workout today!"
+            # ✅ DEFAULT MESSAGE IF STREAK INFO MISSING
+            streak_message = "💪 Great workout today! Keep it up!"
         
         # Calculate run time (send message after workout duration)
         run_time = datetime.now() + timedelta(minutes=workout_minutes)
         job_id = f"motivational_{sender}_{int(datetime.now().timestamp())}"
         
-        # ✅ METHOD 1: Using Template (RECOMMENDED)
+        print(f"📅 Scheduling motivational message:")
+        print(f"   Send time: {run_time.strftime('%H:%M:%S')}")
+        print(f"   Workout mins: {workout_minutes}")
+        print(f"   Calories: {calories_burned or 'N/A'}")
+        print(f"   Streak: {streak_info['current'] if streak_info else 'N/A'}")
+        
         def send_motivational_template():
             """Send motivational message using template or fallback."""
             try:
-                if MOTIVATIONAL_MESSAGE_TEMPLATE_SID:
+                if MOTIVATIONAL_MESSAGE_TEMPLATE_SID and MOTIVATIONAL_MESSAGE_TEMPLATE_SID != "HXxxxxx":
                     clean_streak = streak_message.replace('\n\n', ' ').replace('\n', ' ').strip()
                     clean_streak = clean_streak[:300]  # Limit length
                     
@@ -303,7 +311,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
                         "5": clean_streak
                     }
                     
-                    print(f"📤 Motivational template vars: {template_vars}")
+                    print(f"📤 Sending motivational template with vars: {template_vars}")
                     
                     # Send using template
                     message = client.messages.create(
@@ -329,7 +337,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
                         to=sender,
                         body=motivational_msg
                     )
-                    print(f"✅ Motivational message sent to {sender}")
+                    print(f"✅ Motivational message sent to {sender} (fallback)")
                     
             except Exception as e:
                 error_msg = str(e)
@@ -348,7 +356,7 @@ def schedule_motivational_message(sender, session, workout_minutes, calories_bur
             replace_existing=True
         )
         
-        print(f"✅ Motivational message scheduled for {sender} at {run_time.strftime('%H:%M:%S')}")
+        print(f"✅ Motivational message scheduled for {run_time.strftime('%H:%M:%S')}")
         
     except Exception as e:
         print(f"❌ Error scheduling motivational message: {e}")
@@ -684,13 +692,10 @@ def send_weekly_progress_reports():
 
 def send_daily_workout_plan(phone_number):
     """
-    Send automated daily workout plan to a user.
+    Send automated daily workout plan to a user WITH streak tracking & motivational followup.
     Called by APScheduler at user's preferred time.
-    
-    Args:
-        phone_number: User's WhatsApp number
     """
-    from database_pg import mark_plan_sent, get_user_profile
+    from database_pg import mark_plan_sent, get_user_profile, update_workout_streak
     
     print(f"\n{'='*50}")
     print(f"💪 Sending daily workout to {phone_number}")
@@ -773,6 +778,7 @@ def send_daily_workout_plan(phone_number):
                 f"- Nutrition Plan (macros: protein, calories, carbs, fats, water)\n"
                 f"- Diet Plan (actual meals: breakfast, lunch, dinner, snacks)\n"
                 f"- Recovery tips\n"
+                f"- CRITICAL: Include line 'Estimated Time: ~X minutes' for workout duration\n"
                 f"- Adjust based on user's constraints and restrictions\n"
             )
         )
@@ -790,6 +796,62 @@ def send_daily_workout_plan(phone_number):
         
         # Clean formatting
         response_text = clean_response_formatting(response_text)
+        
+        # ✅ EXTRACT WORKOUT MINUTES FROM RESPONSE
+        workout_minutes = None
+        calories_burned = None
+        progress_percent = None
+        
+        match_time = re.search(r"Estimated Time:\s*~?(\d+)\s*minutes?", response_text, re.IGNORECASE)
+        if match_time:
+            workout_minutes = int(match_time.group(1))
+            print(f"✅ Extracted workout time: {workout_minutes} minutes")
+            
+            # Calculate calories and progress
+            try:
+                weight = float(re.findall(r"\d+", str(session["weight"]))[0])
+                goal = str(session["fitness_goal"]).lower()
+                
+                # MET values based on goal
+                if "muscle" in goal:
+                    MET = 8
+                elif "weight" in goal or "fat" in goal:
+                    MET = 6
+                elif "cardio" in goal:
+                    MET = 7
+                else:
+                    MET = 5
+                
+                calories_burned = int(workout_minutes * MET * 3.5 * weight / 200)
+                progress_percent = min(round(workout_minutes / 10, 1), 100)
+                
+                # ✅ LOG WORKOUT TO DATABASE
+                log_workout_completion(
+                    phone_number,
+                    workout_minutes,
+                    calories_burned,
+                    progress_percent,
+                    session["fitness_goal"]
+                )
+                
+                # ✅ UPDATE STREAK TRACKING
+                current_streak, is_new_record, broke_streak = update_workout_streak(phone_number)
+                
+                # ✅ STORE STREAK INFO IN SESSION FOR MOTIVATIONAL MESSAGE
+                session['latest_streak'] = {
+                    'current': current_streak,
+                    'is_record': is_new_record,
+                    'broke': broke_streak
+                }
+                
+                print(f"✅ Logged workout: {calories_burned} cal, {progress_percent}% progress")
+                print(f"✅ Streak updated: {current_streak} days (new record: {is_new_record})")
+                
+            except Exception as e:
+                print(f"⚠️ Error calculating workout metrics: {e}")
+        else:
+            print(f"⚠️ Could not extract 'Estimated Time' from response")
+            print(f"   Make sure LLM includes: 'Estimated Time: ~X minutes'")
         
         # Add personalized bonus tips
         bonus_tips = get_personalized_bonus_tips(session)
@@ -826,6 +888,17 @@ def send_daily_workout_plan(phone_number):
         
         # Mark as sent in database
         mark_plan_sent(phone_number)
+        
+        # ✅ SCHEDULE MOTIVATIONAL MESSAGE (AFTER SENDING PLAN)
+        if workout_minutes:
+            print(f"\n🎯 Scheduling motivational message...")
+            schedule_motivational_message(
+                phone_number,
+                session,
+                workout_minutes,
+                calories_burned,
+                progress_percent
+            )
         
         print(f"✅ Daily workout sent successfully to {phone_number}")
         print(f"{'='*50}\n")

@@ -386,29 +386,26 @@ fitness_system_prompt = SystemMessage(
         "6. Generous line breaks between sections\n\n"
         
         "**FORMAT EXAMPLE:**\n\n"
-        "TODAY'S WORKOUT PLAN\n"
-        "Duration: 40 minutes\n"
+        "*TODAY'S WORKOUT PLAN*\n"
         "Estimated Time: ~40 minutes\n\n" 
         
-        "WARM-UP (5 minutes)\n\n"
+        "*WARM-UP (5 minutes)*\n\n"
         "   - Cat-Cow Stretch: 10 reps\n"
         "   - Arm Circles: 15 forward, 15 backward\n\n"
         
-        "MAIN WORKOUT (30 minutes)\n\n"
+        "*MAIN WORKOUT (30 minutes)*\n\n"
         "   - Push-ups: 3 sets x 10 reps\n"
         "   - Squats: 3 sets x 15 reps\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        "NUTRITION PLAN\n\n"
-        "Daily Targets:\n"
+        "*NUTRITION PLAN*\n\n"
         "   - Protein: 150g\n"
         "   - Calories: 2500 kcal\n\n"
         
         "**Response Guidelines:**\n"
         "1. When providing an INITIAL workout plan, use this structured format:\n\n"
         "   TODAY'S WORKOUT PLAN\n"
-        "   Duration: X minutes\n"
         "   Estimated Time: ~X minutes  ← CRITICAL: ALWAYS INCLUDE THIS LINE\n\n"  
         "   - Exercise 1: details\n"
         "   - Exercise 2: details\n\n"
@@ -3700,7 +3697,6 @@ def whatsapp_webhook():
                 content="What's my workout plan for today?"
             ))
             resp = MessagingResponse()
-            resp.message("📋 Preparing today's workout plan...")
             threading.Thread(target=process_and_reply, args=(sender, True)).start()
             return str(resp)
         if session.get("just_viewed_profile"):

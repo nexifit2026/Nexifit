@@ -577,13 +577,15 @@ def get_user_tip_preference(phone_number):
 
 
 def get_users_for_daily_tips():
-    """Get all users who should receive daily tips."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT DISTINCT au.phone_number, au.name
+            SELECT DISTINCT 
+                au.phone_number, 
+                COALESCE(up.name, au.name) AS name
             FROM authorized_users au
             LEFT JOIN user_tip_preferences utp ON au.phone_number = utp.phone_number
+            LEFT JOIN user_profiles up ON au.phone_number = up.phone_number
             WHERE au.authorized = true
             AND (utp.receive_tips IS NULL OR utp.receive_tips = true)
         ''')
@@ -705,13 +707,15 @@ def get_weekly_progress(phone_number):
 
 
 def get_users_for_weekly_report():
-    """Get all active users for sending weekly reports."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT phone_number, name 
-            FROM authorized_users 
-            WHERE authorized = true
+            SELECT 
+                au.phone_number, 
+                COALESCE(up.name, au.name) AS name
+            FROM authorized_users au
+            LEFT JOIN user_profiles up ON au.phone_number = up.phone_number
+            WHERE au.authorized = true
         ''')
         return cursor.fetchall()
 
@@ -1198,7 +1202,6 @@ def save_workout_schedule(phone_number, preferred_time):
 
 
 def get_all_scheduled_users():
-    """Get all users with active workout schedules."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -1206,9 +1209,10 @@ def get_all_scheduled_users():
                 dws.phone_number,
                 dws.preferred_time,
                 dws.job_id,
-                au.name
+                COALESCE(up.name, au.name) AS name
             FROM daily_workout_schedule dws
             JOIN authorized_users au ON dws.phone_number = au.phone_number
+            LEFT JOIN user_profiles up ON dws.phone_number = up.phone_number
             WHERE dws.active = true AND au.authorized = true
         ''')
         return cursor.fetchall()

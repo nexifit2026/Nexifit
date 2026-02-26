@@ -378,16 +378,16 @@ fitness_system_prompt = SystemMessage(
         "5. Modify exercises for reported injuries\n"
         "6. Consider medical conditions in all recommendations\n\n"
         "**FORMATTING RULES - VERY IMPORTANT:**\n"
-        "1. Use CLEAN TEXT - No asterisks, no markdown\n"
-        "2. Use CAPITAL LETTERS for section headers\n"
-        "3. Use simple dashes (-) for lists\n"
+        "1. Use *Bold Headings* with asterisks for ALL section headers\n"
+        "2. Use CAPITAL LETTERS inside the bold for section headers\n"
+        "3. Use simple dashes (-) for list items\n"
         "4. Use line separator: ━━━━━━━━━━━━━━━━━\n"
         "5. Use 3-space indentation for sub-items\n"
         "6. Generous line breaks between sections\n\n"
         
         "**FORMAT EXAMPLE:**\n\n"
         "*TODAY'S WORKOUT PLAN*\n"
-        "Estimated Time: ~40 minutes\n\n" 
+        "Estimated Time: ~40 minutes\n\n"
         
         "*WARM-UP (5 minutes)*\n\n"
         "   - Cat-Cow Stretch: 10 reps\n"
@@ -405,26 +405,33 @@ fitness_system_prompt = SystemMessage(
         
         "**Response Guidelines:**\n"
         "1. When providing an INITIAL workout plan, use this structured format:\n\n"
-        "   TODAY'S WORKOUT PLAN\n"
-        "   Estimated Time: ~X minutes  ← CRITICAL: ALWAYS INCLUDE THIS LINE\n\n"  
-        "   - Exercise 1: details\n"
-        "   - Exercise 2: details\n\n"
-        "   NUTRITION PLAN (Macros & Nutritional Guidelines)\n"
+        "   *TODAY'S WORKOUT PLAN*\n"
+        "   Estimated Time: ~X minutes\n\n"
+        "   *WARM-UP (X minutes)*\n"
+        "   - Exercise 1: details\n\n"
+        "   *MAIN WORKOUT (X minutes)*\n"
+        "   - Exercise 1: details\n\n"
+        "   *COOL DOWN (X minutes)*\n"
+        "   - Stretch details\n\n"
+        "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "   *NUTRITION PLAN*\n"
         "   - Daily protein target: Xg\n"
         "   - Daily calorie target: X calories\n"
         "   - Carbs/Fats ratio: ...\n"
         "   - Hydration: X liters water\n\n"
-        "   DIET PLAN (Actual Meal Suggestions)\n"
+        "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "   *DIET PLAN*\n"
         "   - Breakfast: ...\n"
         "   - Lunch: ...\n"
         "   - Dinner: ...\n"
         "   - Snacks: ...\n\n"
-        "   RECOVERY\n"
+        "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "   *RECOVERY*\n"
         "   - Sleep: X hours\n"
         "   - Rest days: ...\n"
         "   - Stretching: ...\n\n"
         "2. MANDATORY: For EVERY initial workout plan, ALWAYS include the line:\n"
-        "   'Estimated Time: ~X minutes' right after the Duration line\n"
+        "   'Estimated Time: ~X minutes' right after the plan heading\n"
         "   This is REQUIRED for tracking and motivational messages.\n\n"
         "3. NUTRITION vs DIET:\n"
         "   - Nutrition Plan = Numbers (calories, protein, carbs, fats, hydration)\n"
@@ -868,19 +875,19 @@ def send_daily_workout_plan(phone_number):
         
         # Send via Twilio (with smart chunking)
         chunks = smart_chunk(response_text, 1500)
-        
+
         for idx, chunk in enumerate(chunks, 1):
             if len(chunks) > 1:
-                body = f"(Part {idx}/{len(chunks)})\n\n{chunk}"
+                part_header = f"📋 *Part {idx} of {len(chunks)}*\n\n"
+                body = part_header + chunk
             else:
                 body = chunk
             
             client.messages.create(
                 messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
-                to=phone_number,
+                to=sender,
                 body=body
             )
-            
             print(f"   ✅ Sent part {idx}/{len(chunks)}")
         
         # Mark as sent in database
@@ -1805,43 +1812,86 @@ def format_bonus_tips(tips):
     return section
 
 def smart_chunk(text, max_length=1500):
-            if len(text) <= max_length:
-                return [text]
+    """Split text at section boundaries to avoid cutting headings or mid-content."""
+    
+    if len(text) <= max_length:
+        return [text]
+    
+    # Define section separators - split BEFORE these patterns
+    section_patterns = [
+        r'\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n',  # separator line
+        r'\n\*NUTRITION PLAN\*',
+        r'\n\*DIET PLAN\*',
+        r'\n\*RECOVERY\*',
+        r'\n\*WARM-UP',
+        r'\n\*MAIN WORKOUT',
+        r'\n\*UPPER BODY',
+        r'\n\*LOWER BODY',
+        r'\n\*COOL DOWN',
+        r'\n\*BONUS TIPS',
+        r'\nWould you like to set',
+    ]
+    
+    chunks = []
+    remaining = text
+    
+    while len(remaining) > max_length:
+        best_split = -1
+        
+        # Try to find a clean section break within max_length
+        search_area = remaining[:max_length]
+        
+        # Check each section pattern
+        for pattern in section_patterns:
+            matches = list(re.finditer(pattern, search_area))
+            if matches:
+                # Take the LAST match found within the limit
+                last_match = matches[-1]
+                if last_match.start() > 200:  # Don't split too early
+                    best_split = last_match.start()
+        
+        if best_split > 200:
+            # Split at section boundary
+            chunks.append(remaining[:best_split].strip())
+            remaining = remaining[best_split:].strip()
+        else:
+            # No section boundary found - split at paragraph
+            chunk = remaining[:max_length]
             
-            chunks = []
-            while text:
-                if len(text) <= max_length:
-                    chunks.append(text)
-                    break
-                
-                # Find the last sentence boundary before max_length
-                chunk = text[:max_length]
-                
-                # Look for sentence endings: . ! ? followed by space or newline
-                last_period = max(chunk.rfind('. '), chunk.rfind('.\n'))
-                last_exclaim = max(chunk.rfind('! '), chunk.rfind('!\n'))
-                last_question = max(chunk.rfind('? '), chunk.rfind('?\n'))
-                
-                split_pos = max(last_period, last_exclaim, last_question)
-                
-                # If no sentence boundary found, look for newlines
-                if split_pos == -1:
-                    split_pos = chunk.rfind('\n')
-                
-                # If still nothing, split at last space
-                if split_pos == -1:
-                    split_pos = chunk.rfind(' ')
-                
-                # If still nothing (no spaces), just split at max_length
-                if split_pos == -1:
-                    split_pos = max_length - 1
+            # Try paragraph break first
+            last_para = chunk.rfind('\n\n')
+            if last_para > 300:
+                chunks.append(remaining[:last_para].strip())
+                remaining = remaining[last_para:].strip()
+            else:
+                # Try single newline
+                last_newline = chunk.rfind('\n')
+                if last_newline > 300:
+                    chunks.append(remaining[:last_newline].strip())
+                    remaining = remaining[last_newline:].strip()
                 else:
-                    split_pos += 1  # Include the punctuation/newline
-                
-                chunks.append(text[:split_pos].strip())
-                text = text[split_pos:].strip()
-            
-            return chunks
+                    # Last resort - split at sentence
+                    last_period = max(
+                        chunk.rfind('. '),
+                        chunk.rfind('.\n')
+                    )
+                    if last_period > 300:
+                        chunks.append(remaining[:last_period + 1].strip())
+                        remaining = remaining[last_period + 1:].strip()
+                    else:
+                        # Force split
+                        chunks.append(remaining[:max_length].strip())
+                        remaining = remaining[max_length:].strip()
+    
+    if remaining:
+        chunks.append(remaining.strip())
+    
+    # Final safety check - merge very small last chunks with previous
+    if len(chunks) > 1 and len(chunks[-1]) < 100:
+        chunks[-2] = chunks[-2] + '\n\n' + chunks[-1]
+        chunks.pop()
+    
+    return chunks
             
 # ========================
 # 🆕 GENERAL PLAN FUNCTIONS
@@ -2278,7 +2328,8 @@ def handle_skip_and_generate_plan(sender, session):
         
         for idx, chunk in enumerate(chunks, 1):
             if len(chunks) > 1:
-                body = f"(Part {idx}/{len(chunks)})\n\n{chunk}"
+                part_header = f"📋 *Part {idx} of {len(chunks)}*\n\n"
+                body = part_header + chunk
             else:
                 body = chunk
             
@@ -2483,17 +2534,18 @@ def process_and_reply(sender, is_initial_plan=False, incoming_msg=""):
         # Send Main LLM Response
         # Smart chunking: split at sentence boundaries, not mid-sentence
         
-
         chunks = smart_chunk(response_text, 1500)
         session["messages"].append(result["messages"][-1])
-
+        
         total_parts = len(chunks)
         for idx, chunk in enumerate(chunks, start=1):
             if total_parts > 1:
-                body = f"(Part {idx}/{total_parts})\n\n{chunk}"
+                # Add part header so user knows context
+                part_header = f"📋 *Part {idx} of {total_parts}*\n\n"
+                body = part_header + chunk
             else:
                 body = chunk
-
+        
             client.messages.create(
                 messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
                 to=sender,
@@ -3179,7 +3231,8 @@ def whatsapp_webhook():
             "1. Diet preference (Veg/Non-veg/Vegan/Eggetarian)\n"
             "2. Daily activity level outside workout\n"
             "3. Current stress level\n\n"
-            "Example: 'Vegetarian, mostly sitting at desk, medium stress'"
+            "Example: 'Vegetarian, mostly sitting at desk, medium stress'\n\n"
+            "Or type *Skip* to move ahead."
         )
         return str(resp)
 
@@ -3233,7 +3286,8 @@ def whatsapp_webhook():
                 "2. Where you prefer to workout\n"
                 "3. What time you usually workout\n"
                 "4. Any exercises to avoid (optional)\n\n"
-                "Example: '30 minutes, home workouts, evening 6pm, avoid burpees'"
+                "Example: '30 minutes, home workouts, evening 6pm, avoid burpees'\n\n"
+                "Reply in your own words — or type *Skip* if there is nothing to note."
             )
             return str(resp)
         else:

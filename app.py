@@ -3660,15 +3660,6 @@ def whatsapp_webhook():
             resp = MessagingResponse()
             resp.message(confirmation)
             return str(resp)
-
-        # ✅ NOW CHECK IF FITNESS RELATED (AFTER CONFIRMATION)
-        if not is_fitness_related(incoming_msg):
-            resp = MessagingResponse()
-            resp.message(
-                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
-                "Feel free to ask me anything about your fitness journey! 💪"
-            )
-            return str(resp)
             
         # Streak tracking functions
         msg_lower = incoming_msg.lower().strip()
@@ -3753,6 +3744,7 @@ def whatsapp_webhook():
             resp = MessagingResponse()
             threading.Thread(target=process_and_reply, args=(sender, True)).start()
             return str(resp)
+            
         if session.get("just_viewed_profile"):
             session["just_viewed_profile"] = False  # Reset flag
         
@@ -3782,6 +3774,15 @@ def whatsapp_webhook():
                 )
                 return str(resp)
 
+        # ✅ NOW CHECK IF FITNESS RELATED (AFTER CONFIRMATION)
+        if not is_fitness_related(incoming_msg):
+            resp = MessagingResponse()
+            resp.message(
+                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
+                "Feel free to ask me anything about your fitness journey! 💪"
+            )
+            return str(resp)
+            
         # ========== REMINDER HANDLER ==========
         if any(word in msg_lower for word in ['remind', 'reminder', 'set reminder']):
             task, remind_time = parse_reminder_message(incoming_msg, llm)
@@ -3819,7 +3820,6 @@ def whatsapp_webhook():
         print(f"💬 Processing message. History length: {len(session['messages'])}")
 
         resp = MessagingResponse()
-        resp.message("✅ Got it! Let me help you with that...")
         
         # Determine if this is an initial plan request
         msg_lower = incoming_msg.lower()

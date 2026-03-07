@@ -3641,15 +3641,6 @@ def whatsapp_webhook():
                 return str(resp)
         
         # ========== END CONFIRMATION HANDLER ==========
-        
-        # ✅ NOW CHECK IF FITNESS RELATED (AFTER CONFIRMATION)
-        if not is_fitness_related(incoming_msg):
-            resp = MessagingResponse()
-            resp.message(
-                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
-                "Feel free to ask me anything about your fitness journey! 💪"
-            )
-            return str(resp)
 
         # Check if user wants to view profile
         if msg_lower in ['profile', 'my profile', 'show profile', 'view profile', 'current profile']:
@@ -3669,7 +3660,16 @@ def whatsapp_webhook():
             resp = MessagingResponse()
             resp.message(confirmation)
             return str(resp)
-        
+
+        # ✅ NOW CHECK IF FITNESS RELATED (AFTER CONFIRMATION)
+        if not is_fitness_related(incoming_msg):
+            resp = MessagingResponse()
+            resp.message(
+                "⚠️ I specialize in fitness topics like workouts, diet, nutrition, and exercise.\n\n"
+                "Feel free to ask me anything about your fitness journey! 💪"
+            )
+            return str(resp)
+            
         # Streak tracking functions
         msg_lower = incoming_msg.lower().strip()
         
@@ -3782,6 +3782,38 @@ def whatsapp_webhook():
                 )
                 return str(resp)
 
+        # ========== REMINDER HANDLER ==========
+        if any(word in msg_lower for word in ['remind', 'reminder', 'set reminder']):
+            task, remind_time = parse_reminder_message(incoming_msg, llm)
+            
+            if task and remind_time:
+                success = schedule_reminder(sender, task, remind_time)
+                
+                if success:
+                    time_str = remind_time.strftime('%I:%M %p IST on %B %d, %Y')
+                    
+                    resp = MessagingResponse()
+                    resp.message(
+                        f"✅ Reminder set!\n\n"
+                        f"📝 Task: {task}\n"
+                        f"⏰ Time: {time_str}\n\n"
+                        f"I'll remind you then! 💪"
+                    )
+                    return str(resp)
+                else:
+                    resp = MessagingResponse()
+                    resp.message("⚠️ Sorry, couldn't schedule reminder. Scheduler might not be running.")
+                    return str(resp)
+            else:
+                resp = MessagingResponse()
+                resp.message(
+                    "⚠️ Couldn't parse reminder. Try:\n"
+                    "• 'Remind me to drink water in 30 minutes'\n"
+                    "• 'Set reminder at 3pm for workout'"
+                )
+                return str(resp)
+        # ========== END REMINDER HANDLER ==========
+        
         # Add message to history and process
         session["messages"].append(HumanMessage(content=incoming_msg))
         print(f"💬 Processing message. History length: {len(session['messages'])}")

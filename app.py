@@ -885,7 +885,7 @@ def send_daily_workout_plan(phone_number):
             
             client.messages.create(
                 messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
-                to=sender,
+                to=phone_number,
                 body=body
             )
             print(f"   ✅ Sent part {idx}/{len(chunks)}")

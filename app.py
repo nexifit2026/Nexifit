@@ -43,7 +43,10 @@ from database_pg import (
     save_workout_schedule, normalize_workout_time, 
     get_all_scheduled_users, update_schedule_job_id,
     mark_plan_sent, deactivate_workout_schedule,
-    get_user_workout_schedule, initialize_workout_schedule_table, bootstrap_database, seed_default_mental_health_tips
+    get_user_workout_schedule, initialize_workout_schedule_table, bootstrap_database, seed_default_mental_health_tips,
+    send_daily_checkin_message, broadcast_daily_checkins,
+    open_conversation_window_on_reply, can_user_send_message,
+    increment_window_message_count, get_window_stats
 )
 
 # -------------------------
@@ -155,6 +158,18 @@ def init_scheduler():
         )
         print("✅ Daily tips scheduled: 7:00 AM IST (1:30 AM UTC)")
 
+        # Daily check-in broadcast (7:00 AM IST)
+        scheduler.add_job(
+            func=broadcast_daily_checkins,
+            trigger='cron',
+            hour=1,
+            minute=30,
+            id='daily_checkins',
+            name='Send Daily Check-in Messages',
+            replace_existing=True
+        )
+        print("✅ Daily check-ins scheduled: 7:00 AM IST (1:30 AM UTC)")
+        
         # Weekly progress reports (Sunday 8:00 PM IST)
         scheduler.add_job(
             func=send_weekly_progress_reports,
@@ -1484,8 +1499,100 @@ def handle_admin_command(sender, incoming_msg):
         success, message = deactivate_workout_schedule(phone)
         
         return f"{'✅' if success else '⚠️'} {message}"
+    
+    # TEST CHECK-IN
+    elif msg.startswith("ADMIN TEST_CHECKIN"):
+        parts = msg.split()
+        if len(parts) < 3:
+            return "⚠️ Usage: ADMIN TEST_CHECKIN <phone_number>"
+        
+        phone = parts[2]
+        
+        if send_daily_checkin_message(phone):
+            return f"✅ Check-in message sent to {phone}"
+        else:
+            return f"❌ Failed to send check-in to {phone}"
+    
+    # BROADCAST CHECK-INS NOW
+    elif msg == "ADMIN BROADCAST_CHECKINS":
+        broadcast_daily_checkins()
+        return "✅ Broadcasting check-ins to all users... Check console for details."
+    
+    # VIEW WINDOW STATUS
+    elif msg.startswith("ADMIN WINDOW_STATUS"):
+        parts = msg.split()
+        if len(parts) < 3:
+            return "⚠️ Usage: ADMIN WINDOW_STATUS <phone_number>"
+        
+        phone = parts[2]
+        status = can_user_send_message(phone)
+        
+        response = f"📊 *Window Status: {phone}*\n\n"
+        
+        if status['can_message']:
+            if status['reason'] == 'active_window':
+                expires = status['window_expires_at']
+                time_left = (expires - datetime.now()).total_seconds() / 3600
+                response += f"✅ Active Window\n"
+                response += f"Expires: {expires.strftime('%Y-%m-%d %H:%M')}\n"
+                response += f"Time left: {time_left:.1f} hours"
+            else:
+                response += f"✅ Can Message\n"
+                response += f"Reason: {status['reason']}"
+        else:
+            response += f"🔒 No Active Window\n"
+            response += f"Reason: {status['reason']}"
+        
+        return response
+    
+    # FORCE OPEN WINDOW
+    elif msg.startswith("ADMIN OPEN_WINDOW"):
+        parts = msg.split()
+        if len(parts) < 3:
+            return "⚠️ Usage: ADMIN OPEN_WINDOW <phone_number>"
+        
+        phone = parts[2]
+        result = open_conversation_window_on_reply(phone)
+        
+        return (
+            f"✅ Window opened for {phone}\n"
+            f"Expires: {result['expires_at'].strftime('%Y-%m-%d %H:%M')}"
+        )
+    
+    # VIEW CHECK-IN STATS
+    elif msg.startswith("ADMIN CHECKIN_STATS"):
+        parts = msg.split()
+        days = int(parts[2]) if len(parts) > 2 else 7
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cutoff = date.today() - timedelta(days=days)
+            
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_checkins,
+                    SUM(CASE WHEN window_opened THEN 1 ELSE 0 END) as windows_opened,
+                    SUM(messages_in_window) as total_messages
+                FROM daily_checkins
+                WHERE checkin_date >= %s
+            """, (cutoff,))
+            
+            stats = cursor.fetchone()
+        
+        total_checkins = stats['total_checkins'] or 0
+        windows_opened = stats['windows_opened'] or 0
+        total_messages = stats['total_messages'] or 0
+        avg_messages = total_messages / max(windows_opened, 1)
+        
+        return (
+            f"📊 *Check-in Stats (Last {days} Days)*\n\n"
+            f"Check-ins sent: {total_checkins}\n"
+            f"Windows opened: {windows_opened}\n"
+            f"Total messages: {total_messages}\n"
+            f"Avg msgs/window: {avg_messages:.1f}"
+        )
 
-    # ADMIN HELP
+    # ADMIN HELP - Update to show new commands
     elif msg.startswith("ADMIN HELP") or msg == "ADMIN":
         return (
             "🔐 *Admin Commands:*\n\n"
@@ -1506,6 +1613,12 @@ def handle_admin_command(sender, incoming_msg):
             "ADMIN TEST_DAILY <phone>\n"
             "ADMIN RESCHEDULE_ALL\n"
             "ADMIN DISABLE_DAILY <phone>\n\n"
+            "🚪 CONVERSATION WINDOWS:\n"
+            "ADMIN TEST_CHECKIN <phone>\n"
+            "ADMIN BROADCAST_CHECKINS\n"
+            "ADMIN WINDOW_STATUS <phone>\n"
+            "ADMIN OPEN_WINDOW <phone>\n"
+            "ADMIN CHECKIN_STATS [days]\n\n"
             "⏰ SCHEDULER:\n"
             "ADMIN SCHEDULER_STATUS\n"
             "ADMIN TEST_TIPS_NOW\n"
@@ -2984,6 +3097,121 @@ def whatsapp_webhook():
     
     # Log successful authentication
     log_auth_attempt(sender, "authorized_access", success=True)
+
+    # =============================
+    # 📊 SPECIAL COMMANDS (Bypass window check)
+    # =============================
+    msg_lower = incoming_msg.lower().strip()
+    
+    # Check window status
+    if msg_lower in ['status', 'window', 'my window', 'window status']:
+        window_status = can_user_send_message(sender)
+        resp = MessagingResponse()
+        
+        if window_status['can_message']:
+            if window_status['reason'] == 'active_window':
+                expires = window_status['window_expires_at']
+                time_left = (expires - datetime.now()).total_seconds() / 3600
+                
+                resp.message(
+                    f"✅ *Conversation Window Active*\n\n"
+                    f"🕐 Expires: {expires.strftime('%I:%M %p, %b %d')}\n"
+                    f"⏰ Time left: {time_left:.1f} hours\n\n"
+                    f"💬 You can message freely until then!"
+                )
+            else:
+                resp.message(
+                    f"✅ *You Can Message!*\n\n"
+                    f"Your message will open a 24-hour chat window.\n\n"
+                    f"💡 Reply anytime to start chatting!"
+                )
+        else:
+            resp.message(
+                f"⏰ *Window Expired*\n\n"
+                f"Your 24-hour chat window has closed.\n\n"
+                f"🌅 I'll send you a check-in tomorrow morning!\n"
+                f"Reply to it to open a new window.\n\n"
+                f"💪 Your scheduled workouts continue as normal!"
+            )
+        
+        return str(resp)
+    
+    # Get stats
+    if msg_lower in ['stats', 'my stats', 'history']:
+        stats = get_window_stats(sender, days=7)
+        
+        resp = MessagingResponse()
+        
+        if not stats:
+            resp.message("📊 No conversation history yet!")
+        else:
+            message = "📊 *Last 7 Days Activity*\n\n"
+            
+            for day in stats:
+                date_str = day['checkin_date'].strftime('%b %d')
+                
+                if day['window_opened']:
+                    msgs = day['messages_in_window'] or 0
+                    message += f"✅ {date_str}: {msgs} messages\n"
+                elif day['checkin_sent_at']:
+                    message += f"📬 {date_str}: Check-in sent (no reply)\n"
+                else:
+                    message += f"⏸️ {date_str}: No check-in\n"
+            
+            resp.message(message)
+        
+        return str(resp)
+    
+    # =============================
+    # 🚪 CHECK CONVERSATION WINDOW
+    # =============================
+    window_status = can_user_send_message(sender)
+    window_notice = ""
+    
+    if window_status['can_message']:
+        # User can message - check if we need to open window
+        if window_status['reason'] in ['no_checkin_sent', 'waiting_for_reply']:
+            # Open window on their first message
+            window_result = open_conversation_window_on_reply(sender)
+            
+            if window_result['first_time_today']:
+                resp = MessagingResponse()
+                resp.message(
+                    f"✅ *24-Hour Window Activated!*\n\n"
+                    f"Great to hear from you! 🎉\n\n"
+                    f"Your conversation window is now open until:\n"
+                    f"🕐 {window_result['expires_at'].strftime('%I:%M %p, %b %d')}\n\n"
+                    f"Message me freely! What can I help you with today?"
+                )
+                return str(resp)
+        
+        # Track messages in active window
+        if window_status['reason'] == 'active_window':
+            increment_window_message_count(sender)
+            
+            # Add time remaining notice if window closing soon
+            expires = window_status['window_expires_at']
+            time_left = (expires - datetime.now()).total_seconds() / 3600
+            
+            if time_left < 1:  # Less than 1 hour
+                window_notice = f"\n\n⏰ *Window closes in {int(time_left * 60)} minutes!*"
+            elif time_left < 3:  # Less than 3 hours
+                window_notice = f"\n\n⏰ Window closes at {expires.strftime('%I:%M %p')}"
+    else:
+        # Window expired - block message
+        resp = MessagingResponse()
+        resp.message(
+            f"⏰ *Conversation Window Closed*\n\n"
+            f"Your 24-hour window expired.\n\n"
+            f"🌅 I'll send you a check-in message tomorrow morning!\n"
+            f"Reply to it to open a new window.\n\n"
+            f"💡 Meanwhile:\n"
+            f"• Your scheduled workouts continue\n"
+            f"• Weekly reports still arrive\n"
+            f"• Daily wellness tips keep coming\n\n"
+            f"See you tomorrow! 💪"
+        )
+        return str(resp)
     
     # =============================
     # ONBOARDING & CONVERSATION

@@ -1296,7 +1296,285 @@ def search_profiles_by_goal(fitness_goal):
         
         return cursor.fetchall()
 
+# =====================
+# DAILY CHECK-IN & CONVERSATION WINDOWS
+# =====================
 
+def send_daily_checkin_message(phone_number):
+    """
+    Send daily check-in message to open conversation window.
+    Returns True if message was sent successfully.
+    """
+    from twilio.rest import Client
+    import os
+    
+    TWILIO_SID = os.environ.get("TWILIO_SID")
+    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+    TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
+    
+    client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+    
+    # Get user's name for personalization
+    profile = get_user_profile(phone_number)
+    name = profile.get('name', 'there') if profile else 'there'
+    
+    # Variety of check-in messages (rotate daily)
+    checkin_messages = [
+        f"🌅 Good morning, {name}! How are you feeling today? Ready to crush your goals? 💪",
+        f"☀️ Hey {name}! How's your day going so far? Need any fitness advice?",
+        f"👋 Hi {name}! Quick check-in: How's your energy level today? 🔋",
+        f"💪 {name}, hope you're doing great! How's your fitness journey going this week?",
+        f"🌟 Good morning, {name}! What's your biggest win so far this week?",
+        f"✨ Hey {name}! How are you taking care of yourself today?",
+        f"🎯 {name}, checking in! Are you on track with your fitness goals?",
+    ]
+    
+    # Pick message based on day of year (consistent daily rotation)
+    day_index = datetime.now().timetuple().tm_yday % len(checkin_messages)
+    message = checkin_messages[day_index]
+    
+    try:
+        # Send the check-in message
+        sent_message = client.messages.create(
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
+            to=phone_number,
+            body=message
+        )
+        
+        # Log the check-in
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            today = date.today()
+            now = datetime.now()
+            
+            cursor.execute("""
+                INSERT INTO daily_checkins (phone_number, checkin_date, checkin_sent_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (phone_number, checkin_date) 
+                DO UPDATE SET checkin_sent_at = %s
+            """, (phone_number, today, now, now))
+        
+        print(f"✅ Daily check-in sent to {phone_number}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error sending check-in to {phone_number}: {e}")
+        return False
+
+
+def broadcast_daily_checkins():
+    """
+    Send daily check-in messages to all active users.
+    Called by scheduler every morning.
+    """
+    print(f"\n{'='*50}")
+    print(f"📨 Broadcasting Daily Check-ins - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*50}")
+    
+    # Get all authorized users
+    users = get_users_for_weekly_report()
+    
+    if not users:
+        print("⚠️ No users found for check-ins")
+        return
+    
+    success_count = 0
+    error_count = 0
+    
+    for user in users:
+        phone_number = user['phone_number']
+        
+        try:
+            # Check if already sent today
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                today = date.today()
+                
+                cursor.execute("""
+                    SELECT checkin_sent_at FROM daily_checkins
+                    WHERE phone_number = %s AND checkin_date = %s
+                """, (phone_number, today))
+                
+                result = cursor.fetchone()
+                
+                if result and result['checkin_sent_at']:
+                    print(f"ℹ️ Check-in already sent to {phone_number} today")
+                    continue
+            
+            # Send check-in
+            if send_daily_checkin_message(phone_number):
+                success_count += 1
+            else:
+                error_count += 1
+                
+        except Exception as e:
+            print(f"❌ Error processing {phone_number}: {e}")
+            error_count += 1
+    
+    print(f"\n{'='*50}")
+    print(f"📊 Check-in Broadcast Summary:")
+    print(f"   ✅ Sent: {success_count}")
+    print(f"   ❌ Failed: {error_count}")
+    print(f"   📱 Total Users: {len(users)}")
+    print(f"{'='*50}\n")
+
+
+def open_conversation_window_on_reply(phone_number):
+    """
+    Open 24-hour conversation window when user replies to check-in.
+    
+    Returns:
+        dict: {
+            'window_opened': bool,
+            'expires_at': datetime,
+            'first_time_today': bool
+        }
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        today = date.today()
+        now = datetime.now()
+        expires_at = now + timedelta(hours=24)
+        
+        # Check if window already opened today
+        cursor.execute("""
+            SELECT window_opened, window_expires_at
+            FROM daily_checkins
+            WHERE phone_number = %s AND checkin_date = %s
+        """, (phone_number, today))
+        
+        result = cursor.fetchone()
+        
+        if result and result['window_opened']:
+            # Window already open - just return expiry
+            return {
+                'window_opened': True,
+                'expires_at': result['window_expires_at'],
+                'first_time_today': False
+            }
+        
+        # Open new window
+        cursor.execute("""
+            INSERT INTO daily_checkins 
+            (phone_number, checkin_date, user_replied_at, window_opened, window_expires_at)
+            VALUES (%s, %s, %s, true, %s)
+            ON CONFLICT (phone_number, checkin_date) 
+            DO UPDATE SET 
+                user_replied_at = %s,
+                window_opened = true,
+                window_expires_at = %s
+        """, (phone_number, today, now, expires_at, now, expires_at))
+        
+        print(f"✅ 24h window opened for {phone_number} until {expires_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        return {
+            'window_opened': True,
+            'expires_at': expires_at,
+            'first_time_today': True
+        }
+
+
+def can_user_send_message(phone_number):
+    """
+    Check if user has an active conversation window.
+    
+    Returns:
+        dict: {
+            'can_message': bool,
+            'reason': str,
+            'window_expires_at': datetime or None,
+            'checkin_sent_today': bool
+        }
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        today = date.today()
+        now = datetime.now()
+        
+        # Check today's check-in status
+        cursor.execute("""
+            SELECT 
+                checkin_sent_at,
+                window_opened,
+                window_expires_at
+            FROM daily_checkins
+            WHERE phone_number = %s AND checkin_date = %s
+        """, (phone_number, today))
+        
+        result = cursor.fetchone()
+        
+        # No check-in sent yet today - allow message (this will open window)
+        if not result or not result['checkin_sent_at']:
+            return {
+                'can_message': True,
+                'reason': 'no_checkin_sent',
+                'window_expires_at': None,
+                'checkin_sent_today': False
+            }
+        
+        # Check-in sent but user hasn't replied yet - allow (will open window)
+        if not result['window_opened']:
+            return {
+                'can_message': True,
+                'reason': 'waiting_for_reply',
+                'window_expires_at': None,
+                'checkin_sent_today': True
+            }
+        
+        # Check if window is still active
+        window_expires = result['window_expires_at']
+        
+        if now < window_expires:
+            return {
+                'can_message': True,
+                'reason': 'active_window',
+                'window_expires_at': window_expires,
+                'checkin_sent_today': True
+            }
+        
+        # Window expired
+        return {
+            'can_message': False,
+            'reason': 'window_expired',
+            'window_expires_at': window_expires,
+            'checkin_sent_today': True
+        }
+
+
+def increment_window_message_count(phone_number):
+    """Track number of messages in current window."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        today = date.today()
+        
+        cursor.execute("""
+            UPDATE daily_checkins
+            SET messages_in_window = messages_in_window + 1
+            WHERE phone_number = %s AND checkin_date = %s
+        """, (phone_number, today))
+
+
+def get_window_stats(phone_number, days=7):
+    """Get user's conversation window usage statistics."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cutoff = date.today() - timedelta(days=days)
+        
+        cursor.execute("""
+            SELECT 
+                checkin_date,
+                checkin_sent_at,
+                user_replied_at,
+                window_opened,
+                messages_in_window
+            FROM daily_checkins
+            WHERE phone_number = %s 
+            AND checkin_date >= %s
+            ORDER BY checkin_date DESC
+        """, (phone_number, cutoff))
+        
+        return cursor.fetchall()
+        
 # Initialize pool on module import
 try:
     initialize_pool()
@@ -1462,10 +1740,31 @@ def bootstrap_database():
             )
         """)
 
+        # ==================================================
+        # 6️⃣ DAILY CHECK-IN & CONVERSATION WINDOWS
+        # ==================================================
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_checkins (
+                id SERIAL PRIMARY KEY,
+                phone_number TEXT NOT NULL,
+                checkin_date DATE NOT NULL,
+                checkin_sent_at TIMESTAMP,
+                user_replied_at TIMESTAMP,
+                window_opened BOOLEAN DEFAULT false,
+                window_expires_at TIMESTAMP,
+                messages_in_window INTEGER DEFAULT 0,
+                UNIQUE(phone_number, checkin_date),
+                FOREIGN KEY (phone_number) REFERENCES authorized_users(phone_number)
+            )
+        """)
+        
+        print("✅ Daily check-in table created")
+        
         print("✅ FULL database bootstrap completed")
 
-                # ==================================================
-        # 6️⃣ DEFAULT ADMIN (AUTO-INSERT)
+        # ==================================================
+        # 7️⃣ DEFAULT ADMIN (AUTO-INSERT)
         # ==================================================
 
         DEFAULT_ADMIN = "whatsapp:+918667643749"

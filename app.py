@@ -3177,10 +3177,7 @@ def whatsapp_webhook():
             if window_result['first_time_today']:
                 resp = MessagingResponse()
                 resp.message(
-                    f"✅ *24-Hour Window Activated!*\n\n"
                     f"Great to hear from you! 🎉\n\n"
-                    f"Your conversation window is now open until:\n"
-                    f"🕐 {window_result['expires_at'].strftime('%I:%M %p, %b %d')}\n\n"
                     f"Message me freely! What can I help you with today?"
                 )
                 return str(resp)
